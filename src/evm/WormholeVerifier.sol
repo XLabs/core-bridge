@@ -62,6 +62,7 @@ uint256 constant MASK_UPDATE_RESULT_INVALID_OPCODE              = 1 << 31;
 uint256 constant MASK_UPDATE_RESULT_INVALID_DATA_LENGTH         = 1 << 32;
 uint256 constant MASK_UPDATE_RESULT_MULTISIG_KEY_INDEX_MISMATCH = 1 << 33;
 uint256 constant MASK_UPDATE_RESULT_INVALID_ECDSA_KEY           = 1 << 34;
+uint256 constant MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX    = 1 << 35;
 
 // Get opcodes
 uint8 constant GET_CURRENT_MULTISIG_KEY_DATA = 0;
@@ -394,7 +395,7 @@ contract WormholeVerifier is EIP712Encoding {
 
       function ecrecover(digest, v, r, s, buffer, expected) -> success {
         mstore(buffer, digest)
-        mstore(add(buffer, OFFSET_ECRECOVER_V), v)
+        mstore(add(buffer, OFFSET_ECRECOVER_V), add(v, MAGIC_ECRECOVER_PARITY_DELTA))
         mstore(add(buffer, OFFSET_ECRECOVER_R), r)
         mstore(add(buffer, OFFSET_ECRECOVER_S), s)
         success := staticcall(gas(), ADDRESS_ECRECOVER, buffer, LENGTH_ECRECOVER_BUFFER, buffer, LENGTH_ECRECOVER_RESULT)
@@ -406,7 +407,7 @@ contract WormholeVerifier is EIP712Encoding {
 
         let success := ecrecover(
           sub(SECP256K1_ORDER, mulmod(px, s, SECP256K1_ORDER)),
-          add(parity, MAGIC_ECRECOVER_PARITY_DELTA),
+          parity,
           px,
           mulmod(px, e, SECP256K1_ORDER),
           buffer,
@@ -433,7 +434,7 @@ contract WormholeVerifier is EIP712Encoding {
 
           // Call ecrecover
           let expected := mload(add(keyDataOffset, shl(5, signerIndex)))
-          let signatureMatch := ecrecover(digest, add(v, MAGIC_ECRECOVER_PARITY_DELTA), r, s, buffer, expected)
+          let signatureMatch := ecrecover(digest, v, r, s, buffer, expected)
 
           // Validate the result
           let indexInvalid := iszero(lt(signerIndex, keyCount))
@@ -456,7 +457,7 @@ contract WormholeVerifier is EIP712Encoding {
       function checkQuorum(signatureCount, keyCount) -> invalidSignatureCount {
         // Verify that signatureCount > 2 * keyCount / 3
         let quorum := div(shl(1, keyCount), 3)
-        let entryInvalidSignatureCount := iszero(gt(signatureCount, quorum))
+        invalidSignatureCount := iszero(gt(signatureCount, quorum))
       }
 
       // Verification functions
@@ -710,7 +711,7 @@ contract WormholeVerifier is EIP712Encoding {
 
       function ecrecover(digest, v, r, s, buffer, expected) -> success {
         mstore(buffer, digest)
-        mstore(add(buffer, OFFSET_ECRECOVER_V), v)
+        mstore(add(buffer, OFFSET_ECRECOVER_V), add(v, MAGIC_ECRECOVER_PARITY_DELTA))
         mstore(add(buffer, OFFSET_ECRECOVER_R), r)
         mstore(add(buffer, OFFSET_ECRECOVER_S), s)
         success := staticcall(gas(), ADDRESS_ECRECOVER, buffer, LENGTH_ECRECOVER_BUFFER, buffer, LENGTH_ECRECOVER_RESULT)
@@ -722,7 +723,7 @@ contract WormholeVerifier is EIP712Encoding {
 
         let success := ecrecover(
           sub(SECP256K1_ORDER, mulmod(px, s, SECP256K1_ORDER)),
-          add(parity, MAGIC_ECRECOVER_PARITY_DELTA),
+          parity,
           px,
           mulmod(px, e, SECP256K1_ORDER),
           buffer,
@@ -749,7 +750,7 @@ contract WormholeVerifier is EIP712Encoding {
 
           // Call ecrecover
           let expected := mload(add(keyDataOffset, shl(5, signerIndex)))
-          let signatureMatch := ecrecover(digest, add(v, MAGIC_ECRECOVER_PARITY_DELTA), r, s, buffer, expected)
+          let signatureMatch := ecrecover(digest, v, r, s, buffer, expected)
 
           // Validate the result
           let indexInvalid := iszero(lt(signerIndex, keyCount))
@@ -772,7 +773,7 @@ contract WormholeVerifier is EIP712Encoding {
       function checkQuorum(signatureCount, keyCount) -> invalidSignatureCount {
         // Verify that signatureCount > 2 * keyCount / 3
         let quorum := div(shl(1, keyCount), 3)
-        let entryInvalidSignatureCount := iszero(gt(signatureCount, quorum))
+        invalidSignatureCount := iszero(gt(signatureCount, quorum))
       }
 
       // Verification functions
@@ -1362,7 +1363,7 @@ contract WormholeVerifier is EIP712Encoding {
     (signerIndex, r, s, v, offset) = data.decodeGuardianSignatureCdUnchecked(offset);
 
     // We only allow registrations for the current threshold key
-    require(keyIndex + 1 == _getECDSAKeyCount(), UpdateFailed(baseOffset | MASK_UPDATE_RESULT_INVALID_KEY_INDEX));
+    require(keyIndex + 1 == _getECDSAKeyCount(), UpdateFailed(baseOffset | MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX));
 
     // Get the shard data range associated with the ecdsa key
     (uint40 shardBase, uint8 shardCount, uint32 multisigKeyIndex) = _getECDSAExtraData(keyIndex);
@@ -1791,7 +1792,8 @@ contract WormholeVerifier is EIP712Encoding {
     uint32 keyIndex = _getECDSAKeyCount();
     // Append the key data
     uint256 pubkeySlot = SLOT_ECDSA_KEY_DATA + keyIndex;
-    assembly ("memory-safe") { sstore(pubkeySlot, pubkey) }
+    uint256 pubkeyData = uint256(uint160(pubkey)) << SHIFT_ECDSA_ENTRY_PUBKEY;
+    assembly ("memory-safe") { sstore(pubkeySlot, pubkeyData) }
 
     uint40 shardBase;
     assembly ("memory-safe") { shardBase := sload(SLOT_ECDSA_SHARD_COUNT) }
