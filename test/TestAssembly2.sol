@@ -463,6 +463,7 @@ contract WormholeV1MockVerification {
       signatures: new GuardianSignature[](0),
       hash: 0x0
     });
+
     return (result, true, "");
   }
 }
@@ -602,8 +603,8 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     bytes memory bigSchnorrVaaHeader2 = new bytes(schnorrVaaHeaderLength2);
     
     for (uint256 i = 0; i < schnorrVaaHeaderLength2; i++) {
-      smallSchnorrVaaHeader2[i] = smallSchnorrVaa[i];
-      bigSchnorrVaaHeader2[i] = bigSchnorrVaa[i];
+      smallSchnorrVaaHeader2[i] = smallSchnorrVaa[i + 1];
+      bigSchnorrVaaHeader2[i] = bigSchnorrVaa[i + 1];
     }
 
     bytes memory smallECDSAVaaHeader2 = new bytes(ecdsaVaaHeaderLength2);
@@ -1491,4 +1492,3 @@ contract TestAssembly2 is VerificationTestAPI {
     _wormholeVerifierV2.verify(smallSchnorrVaa);
   }
 }
-
