@@ -113,42 +113,42 @@ contract WormholeVerifier is EIP712Encoding {
   // Slot layout information
   uint256 private constant SLOT_MULTISIG_KEY_COUNT  = 1000;
   uint256 private constant SLOT_SCHNORR_KEY_COUNT   = 1001;
-  uint256 private constant SLOT_SCHNORR_SHARD_COUNT = 1002;
-  uint256 private constant SLOT_ECDSA_KEY_COUNT     = 1003;
-  uint256 private constant SLOT_ECDSA_SHARD_COUNT   = 1004;
+  uint256 private constant SLOT_ECDSA_KEY_COUNT     = 1002;
 
-  uint256 private constant SLOT_SCHNORR_KEY_DATA   = 1 << 48;
-  uint256 private constant SLOT_SCHNORR_EXTRA_DATA = 2 << 48;
-  uint256 private constant SLOT_SCHNORR_SHARD_DATA = 3 << 48;
-  uint256 private constant SLOT_MULTISIG_KEY_DATA  = 4 << 48;
-  uint256 private constant SLOT_ECDSA_KEY_DATA     = 5 << 48;
-  uint256 private constant SLOT_ECDSA_EXTRA_DATA   = 6 << 48;
-  uint256 private constant SLOT_ECDSA_SHARD_DATA   = 7 << 48;
-  uint256 private constant SLOT_NONCE_BITMAP       = 1 << 64;
+  uint256 private constant SLOT_MULTISIG_KEY_DATA       =  1 << 64;
+
+  uint256 private constant SLOT_SCHNORR_KEY_DATA        =  2 << 64;
+  uint256 private constant SLOT_SCHNORR_EXTRA_DATA      =  3 << 64;
+  uint256 private constant SLOT_SCHNORR_SHARD_MAP_SHARD =  4 << 64;
+  uint256 private constant SLOT_SCHNORR_SHARD_MAP_ID    =  5 << 64;
+  uint256 private constant SLOT_SCHNORR_NONCE_BITMAP    =  6 << 64;
+  
+  uint256 private constant SLOT_ECDSA_KEY_DATA          =  7 << 64;
+  uint256 private constant SLOT_ECDSA_EXTRA_DATA        =  8 << 64;
+  uint256 private constant SLOT_ECDSA_SHARD_MAP_SHARD   =  9 << 64;
+  uint256 private constant SLOT_ECDSA_SHARD_MAP_ID      = 10 << 64;
+  uint256 private constant SLOT_ECDSA_NONCE_BITMAP      = 11 << 64;
 
   // ECDSA key data information
-  uint256 private constant MASK_ECDSA_ENTRY_EXPIRATION_TIME    = 0xFFFFFFFF;
-  uint256 private constant SHIFT_ECDSA_ENTRY_PUBKEY             = 32;
+  uint256 private constant MASK_ECDSA_ENTRY_EXPIRATION_TIME = 0xFFFFFFFF;
+  uint256 private constant SHIFT_ECDSA_ENTRY_PUBKEY = 32;
 
   // ECDSA extra data information
-  uint256 private constant MASK_ECDSA_ENTRY_SHARD_BASE        = 0xFFFFFFFFFF;
   uint256 private constant MASK_ECDSA_ENTRY_SHARD_COUNT        = 0xFF;
-  uint256 private constant MASK_ECDSA_ENTRY_MULTISIG_KEY_INDEX  = 0xFFFFFFFF;
-  uint256 private constant SHIFT_ECDSA_ENTRY_SHARD_COUNT       = 40;
-  uint256 private constant SHIFT_ECDSA_ENTRY_MULTISIG_KEY_INDEX = 40 + 8;
+  uint256 private constant MASK_ECDSA_ENTRY_MULTISIG_KEY_INDEX = 0xFFFFFFFF;
+  uint256 private constant SHIFT_ECDSA_ENTRY_MULTISIG_KEY_INDEX = 8;
   
   // Schnorr key data information
-  uint256 private constant SHIFT_SCHNORR_KEY_PX = 1;
   uint256 private constant MASK_SCHNORR_KEY_PARITY = 1;
+  uint256 private constant SHIFT_SCHNORR_KEY_PX = 1;
 
   // Schnorr extra data information
-  uint256 private constant MASK_SCHNORR_EXTRA_EXPIRATION_TIME     = 0xFFFFFFFF;
-  uint256 private constant MASK_SCHNORR_EXTRA_SHARD_COUNT         = 0xFF;
-  uint256 private constant MASK_SCHNORR_EXTRA_SHARD_BASE          = 0xFFFFFFFFFF;
-  uint256 private constant MASK_SCHNORR_EXTRA_MULTISIG_KEY_INDEX  = 0xFFFFFFFF;
+  uint256 private constant MASK_SCHNORR_EXTRA_EXPIRATION_TIME    = 0xFFFFFFFF;
+  uint256 private constant MASK_SCHNORR_EXTRA_SHARD_COUNT        = 0xFF;
+  uint256 private constant MASK_SCHNORR_EXTRA_MULTISIG_KEY_INDEX = 0xFFFFFFFF;
+
   uint256 private constant SHIFT_SCHNORR_EXTRA_SHARD_COUNT        = 32;
-  uint256 private constant SHIFT_SCHNORR_EXTRA_SHARD_BASE         = 32 + 8;
-  uint256 private constant SHIFT_SCHNORR_EXTRA_MULTISIG_KEY_INDEX = 32 + 8 + 40;
+  uint256 private constant SHIFT_SCHNORR_EXTRA_MULTISIG_KEY_INDEX = 32 + 8;
 
   // Multisig key data information
   uint256 private constant MASK_MULTISIG_ENTRY_EXPIRATION_TIME = 0xFFFFFFFF;
@@ -229,6 +229,9 @@ contract WormholeVerifier is EIP712Encoding {
   uint256 private constant OFFSET_BATCH_DATA         = 4 + 1;
   uint256 private constant OFFSET_BATCH_UNIFORM_DATA = 4 + 1 + 4;
 
+  uint256 private constant LENGTH_BATCH_MINIMUM = 4 + 1 + 1;
+  uint256 private constant LENGTH_BATCH_UNIFORM_MINIMUM = 4 + 1 + 4 + 1;
+
   // Offsets relative to each entry's start
   uint256 private constant OFFSET_BATCH_MULTISIG_SIGNATURE_COUNT = 4;
   uint256 private constant OFFSET_BATCH_MULTISIG_SIGNATURES      = 4 + 1;
@@ -237,6 +240,8 @@ contract WormholeVerifier is EIP712Encoding {
   uint256 private constant OFFSET_BATCH_SCHNORR_ENTRY_S      = 4 + 20;
   uint256 private constant OFFSET_BATCH_SCHNORR_ENTRY_DIGEST = 4 + 20 + 32;
   uint256 private constant LENGTH_BATCH_SCHNORR_ENTRY        = 4 + 20 + 32 + 32;
+
+  uint256 private constant LENGTH_VERSIONED_BATCH_SCHNORR_ENTRY = 1 + 4 + 20 + 32 + 32;
 
   uint256 private constant OFFSET_BATCH_SCHNORR_UNIFORM_S      = 20;
   uint256 private constant OFFSET_BATCH_SCHNORR_UNIFORM_DIGEST = 20 + 32;
@@ -315,7 +320,7 @@ contract WormholeVerifier is EIP712Encoding {
     assembly ("memory-safe") {
       // NOTE: Unfortunately, we have to duplicate this pile of functions because of Solidity's inability to share them between assembly blocks
 
-      // !!!!!                    START OF DUPLICATED FUNCTIONS                    !!!!!
+     // !!!!!                    START OF DUPLICATED FUNCTIONS                    !!!!!
       // !!!!!    Please make sure that they are kept identical between copies!    !!!!!
 
       // Calldata reader functions
@@ -453,7 +458,7 @@ contract WormholeVerifier is EIP712Encoding {
       function checkExpirationTime(expirationTime) -> invalidExpirationTime {
         invalidExpirationTime := iszero(or(iszero(expirationTime), gt(expirationTime, timestamp())))
       }
-      
+
       function checkQuorum(signatureCount, keyCount) -> invalidSignatureCount {
         // Verify that signatureCount > 2 * keyCount / 3
         let quorum := div(shl(1, keyCount), 3)
@@ -862,7 +867,8 @@ contract WormholeVerifier is EIP712Encoding {
         let invalidSignatureCount := 0
         let invalidUsedSigner := 0
         let invalidIndex := 0
-        let invalidTotal := 0
+        let invalidMessageLength := lt(calldatasize(), LENGTH_BATCH_MINIMUM)
+        let invalidTotal := invalidMessageLength
 
         let buffer := mload(PTR_FREE_MEMORY)
         let offset := OFFSET_BATCH_DATA
@@ -893,7 +899,7 @@ contract WormholeVerifier is EIP712Encoding {
             // Verify the signature
             invalidExpirationTime, invalidPubkey, invalidSignature, invalidMismatch := verifySingleSchnorr(keyIndex, r, s, digest, buffer)
             invalidTotal := or(invalidExpirationTime, or(invalidPubkey, or(invalidSignature, invalidMismatch)))
-            offset := add(offset, LENGTH_BATCH_SCHNORR_ENTRY)
+            offset := add(offset, LENGTH_VERSIONED_BATCH_SCHNORR_ENTRY)
           }
           case 0x01 {
             // Decode the multisig header and digest
@@ -913,7 +919,7 @@ contract WormholeVerifier is EIP712Encoding {
           }
         }
 
-        let invalidMessageLength := iszero(eq(calldatasize(), offset))
+        invalidMessageLength := or(invalidMessageLength, iszero(eq(calldatasize(), offset)))
         invalidTotal := or(invalidTotal, invalidMessageLength)
 
         if invalidTotal {
@@ -924,11 +930,13 @@ contract WormholeVerifier is EIP712Encoding {
           let flagInvalidSignatureCount := shl(SHIFT_VERIFY_RESULT_INVALID_SIGNATURE_COUNT, invalidSignatureCount)
           let flagInvalidUsedSigner := shl(SHIFT_VERIFY_RESULT_SIGNER_USED, invalidUsedSigner)
           let flagInvalidIndex := shl(SHIFT_VERIFY_RESULT_INVALID_SIGNER_INDEX, invalidIndex)
+          let flagInvalidMessageLength := shl(SHIFT_VERIFY_RESULT_INVALID_MESSAGE_LENGTH, invalidMessageLength)
 
           let flags1 := or(flagInvalidExpirationTime, flagInvalidPubkey)
           let flags2 := or(flagInvalidSignature, flagInvalidMismatch)
-          let flags3 := or(or(flagInvalidSignatureCount, flagInvalidUsedSigner), flagInvalidIndex)
-          verificationFailed(or(flags1, or(flags2, flags3)))
+          let flags3 := or(flagInvalidSignatureCount, flagInvalidUsedSigner)
+          let flags4 := or(flagInvalidIndex, flagInvalidMessageLength)
+          verificationFailed(or(flags1, or(flags2, or(flags3, flags4))))
         }
       }
 
@@ -939,7 +947,8 @@ contract WormholeVerifier is EIP712Encoding {
         let invalidIndex := 0
         let invalidMismatch := 0
         let invalidUsedSigner := 0
-        let invalidTotal := 0
+        let invalidMessageLength := lt(calldatasize(), LENGTH_BATCH_MINIMUM)
+        let invalidTotal := invalidMessageLength
 
         let buffer := mload(PTR_FREE_MEMORY)
         let offset := OFFSET_BATCH_DATA
@@ -958,7 +967,7 @@ contract WormholeVerifier is EIP712Encoding {
           offset := add(digestOffset, LENGTH_WORD)
         }
 
-        let invalidMessageLength := iszero(eq(calldatasize(), offset))
+        invalidMessageLength := or(invalidMessageLength, iszero(eq(calldatasize(), offset)))
         invalidTotal := or(invalidTotal, invalidMessageLength)
 
         if invalidTotal {
@@ -971,7 +980,8 @@ contract WormholeVerifier is EIP712Encoding {
         let invalidPubkey := 0
         let invalidSignature := 0
         let invalidMismatch := 0
-        let invalidTotal := 0
+        let invalidMessageLength := lt(calldatasize(), LENGTH_BATCH_MINIMUM)
+        let invalidTotal := invalidMessageLength
 
         let buffer := mload(PTR_FREE_MEMORY)
         let offset := OFFSET_BATCH_DATA
@@ -988,7 +998,7 @@ contract WormholeVerifier is EIP712Encoding {
           invalidTotal := or(invalidExpirationTime, or(invalidPubkey, or(invalidSignature, invalidMismatch)))
         }
 
-        let invalidMessageLength := iszero(eq(calldatasize(), offset))
+        invalidMessageLength := or(invalidMessageLength, iszero(eq(calldatasize(), offset)))
         invalidTotal := or(invalidTotal, invalidMessageLength)
 
         if invalidTotal {
@@ -1044,7 +1054,8 @@ contract WormholeVerifier is EIP712Encoding {
         let invalidIndex := 0
         let invalidMismatch := 0
         let invalidUsedSigner := 0
-        let invalidTotal := invalidExpirationTime
+        let invalidMessageLength := lt(calldatasize(), LENGTH_BATCH_UNIFORM_MINIMUM)
+        let invalidTotal := or(invalidExpirationTime, invalidMessageLength)
         
         let buffer := add(keyDataOffset, keyDataSize)
         let offset := OFFSET_BATCH_UNIFORM_DATA
@@ -1062,7 +1073,7 @@ contract WormholeVerifier is EIP712Encoding {
           offset := add(digestOffset, LENGTH_WORD)
         }
 
-        let invalidMessageLength := iszero(eq(calldatasize(), offset))
+        invalidMessageLength := or(invalidMessageLength, iszero(eq(calldatasize(), offset)))
         invalidTotal := or(invalidTotal, invalidMessageLength)
 
         if invalidTotal {
@@ -1083,7 +1094,8 @@ contract WormholeVerifier is EIP712Encoding {
         let invalidPubkey := 0
         let invalidSignature := 0
         let invalidMismatch := 0
-        let invalidTotal := invalidExpirationTime
+        let invalidMessageLength := lt(calldatasize(), LENGTH_BATCH_UNIFORM_MINIMUM)
+        let invalidTotal := or(invalidExpirationTime, invalidMessageLength)
 
         let buffer := mload(PTR_FREE_MEMORY)
         let offset := OFFSET_BATCH_UNIFORM_DATA
@@ -1098,7 +1110,7 @@ contract WormholeVerifier is EIP712Encoding {
           invalidTotal := or(invalidPubkey, or(invalidSignature, invalidMismatch))
         }
 
-        let invalidMessageLength := iszero(eq(calldatasize(), offset))
+        invalidMessageLength := or(invalidMessageLength, iszero(eq(calldatasize(), offset)))
         invalidTotal := or(invalidTotal, invalidMessageLength)
 
         if invalidTotal {
@@ -1206,13 +1218,13 @@ contract WormholeVerifier is EIP712Encoding {
         if (opcode == GET_CURRENT_ECDSA_KEY_DATA) {
           uint32 index = _getECDSAKeyCount() - 1;
           (address pubkey, uint32 expirationTime) = _getECDSAKeyData(index);
-          (uint40 shardBase, uint8 shardCount, uint32 multisigKeyIndex) = _getECDSAExtraData(index);
+          (uint8 shardCount, uint32 multisigKeyIndex) = _getECDSAExtraData(index);
 
-          result = abi.encodePacked(result, index, pubkey, expirationTime, shardBase, shardCount, multisigKeyIndex);
+          result = abi.encodePacked(result, index, pubkey, expirationTime, shardCount, multisigKeyIndex);
         } else if (opcode == GET_CURRENT_SCHNORR_KEY_DATA) {
           uint32 index = _getSchnorrKeyCount() - 1;
           uint256 pubkey = _getSchnorrKeyData(index);
-          (uint32 expirationTime, uint8 shardCount, , uint32 multisigKeyIndex) = _getSchnorrExtraData(index);
+          (uint32 expirationTime, uint8 shardCount, uint32 multisigKeyIndex) = _getSchnorrExtraData(index);
 
           result = abi.encodePacked(result, index, pubkey, expirationTime, shardCount, multisigKeyIndex);
         } else if (opcode == GET_CURRENT_MULTISIG_KEY_DATA) {
@@ -1225,15 +1237,15 @@ contract WormholeVerifier is EIP712Encoding {
           (index, offset) = data.asUint32CdUnchecked(offset);
 
           (address pubkey, uint32 expirationTime) = _getECDSAKeyData(index);
-          (uint40 shardBase, uint8 shardCount, uint32 multisigKeyIndex) = _getECDSAExtraData(index);
+          (uint8 shardCount, uint32 multisigKeyIndex) = _getECDSAExtraData(index);
 
-          result = abi.encodePacked(result, pubkey, expirationTime, shardBase, shardCount, multisigKeyIndex);
+          result = abi.encodePacked(result, pubkey, expirationTime, shardCount, multisigKeyIndex);
         } else if (opcode == GET_SCHNORR_KEY_DATA) {
           uint32 index;
           (index, offset) = data.asUint32CdUnchecked(offset);
 
           uint256 pubkey = _getSchnorrKeyData(index);
-          (uint32 expirationTime, uint8 shardCount, , uint32 multisigKeyIndex) = _getSchnorrExtraData(index);
+          (uint32 expirationTime, uint8 shardCount, uint32 multisigKeyIndex) = _getSchnorrExtraData(index);
 
           result = abi.encodePacked(result, pubkey, expirationTime, shardCount, multisigKeyIndex);
         } else if (opcode == GET_MULTISIG_KEY_DATA) {
@@ -1244,19 +1256,19 @@ contract WormholeVerifier is EIP712Encoding {
 
           result = abi.encodePacked(result, uint8(keys.length), keys, expirationTime);
         } else if (opcode == GET_ECDSA_SHARD_DATA) {
-          uint32 ecdsaKeyIndex;
-          (ecdsaKeyIndex, offset) = data.asUint32CdUnchecked(offset);
+          uint32 keyIndex;
+          (keyIndex, offset) = data.asUint32CdUnchecked(offset);
 
-          (uint40 shardBase, uint8 shardCount,) = _getECDSAExtraData(ecdsaKeyIndex);
-          bytes memory shardData = _getShardDataExport(SLOT_ECDSA_SHARD_DATA, shardBase, shardCount);
+          (uint8 shardCount,) = _getECDSAExtraData(keyIndex);
+          bytes memory shardData = _getShardDataExport(SLOT_ECDSA_SHARD_MAP_SHARD, SLOT_ECDSA_SHARD_MAP_ID, keyIndex, shardCount);
 
           result = abi.encodePacked(result, shardCount, shardData);
         } else if (opcode == GET_SCHNORR_SHARD_DATA) {
-          uint32 schnorrKeyIndex;
-          (schnorrKeyIndex, offset) = data.asUint32CdUnchecked(offset);
+          uint32 keyIndex;
+          (keyIndex, offset) = data.asUint32CdUnchecked(offset);
 
-          (, uint8 shardCount, uint40 shardBase,) = _getSchnorrExtraData(schnorrKeyIndex);
-          bytes memory shardData = _getShardDataExport(SLOT_SCHNORR_SHARD_DATA, shardBase, shardCount);
+          (, uint8 shardCount,) = _getSchnorrExtraData(keyIndex);
+          bytes memory shardData = _getShardDataExport(SLOT_SCHNORR_SHARD_MAP_SHARD, SLOT_SCHNORR_SHARD_MAP_ID, keyIndex, shardCount);
 
           result = abi.encodePacked(result, shardCount, shardData);
         } else {
@@ -1324,7 +1336,7 @@ contract WormholeVerifier is EIP712Encoding {
     require(keyIndex + 1 == _getSchnorrKeyCount(), UpdateFailed(baseOffset | MASK_UPDATE_RESULT_INVALID_SCHNORR_KEY_INDEX));
 
     // Get the shard data range associated with the schnorr key
-    (, uint8 shardCount, uint40 shardBase, uint32 multisigKeyIndex) = _getSchnorrExtraData(keyIndex);
+    (, uint8 shardCount, uint32 multisigKeyIndex) = _getSchnorrExtraData(keyIndex);
     require(signerIndex < shardCount, UpdateFailed(baseOffset | MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX));
 
     (address[] memory keys,) = _getMultisigKeyData(multisigKeyIndex);
@@ -1341,7 +1353,7 @@ contract WormholeVerifier is EIP712Encoding {
     _useUnorderedNonce(keyIndex, signerIndex, nonce, baseOffset);
 
     // Store the shard ID
-    _setSchnorrShardId(shardBase, signerIndex, shardId);
+    _setShardId(SLOT_SCHNORR_SHARD_MAP_ID, keyIndex, signerIndex, shardId);
 
     return offset;
   }
@@ -1366,7 +1378,7 @@ contract WormholeVerifier is EIP712Encoding {
     require(keyIndex + 1 == _getECDSAKeyCount(), UpdateFailed(baseOffset | MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX));
 
     // Get the shard data range associated with the ecdsa key
-    (uint40 shardBase, uint8 shardCount, uint32 multisigKeyIndex) = _getECDSAExtraData(keyIndex);
+    (uint8 shardCount, uint32 multisigKeyIndex) = _getECDSAExtraData(keyIndex);
     require(signerIndex < shardCount, UpdateFailed(baseOffset | MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX));
 
     (address[] memory keys,) = _getMultisigKeyData(multisigKeyIndex);
@@ -1383,7 +1395,7 @@ contract WormholeVerifier is EIP712Encoding {
     _useUnorderedNonce(keyIndex, signerIndex, nonce, baseOffset);
 
     // Store the shard ID
-    _setECDSAShardId(shardBase, signerIndex, shardId);
+    _setShardId(SLOT_ECDSA_SHARD_MAP_ID, keyIndex, signerIndex, shardId);
 
     return offset;
   }
@@ -1432,7 +1444,7 @@ contract WormholeVerifier is EIP712Encoding {
     }
   }
 
-  function _appendShardData(bytes memory data, uint256 offset, uint256 shardSlot, uint32 keyIndex, uint8 signatureCount, bytes32 initialShardDataHash) internal {
+  function _appendShardData(bytes memory data, uint256 offset, uint256 shardSlot, uint256 idSlot, uint32 keyIndex, uint8 signatureCount, bytes32 initialShardDataHash) internal {
     unchecked {
       bytes memory shardData;
       (shardData, offset) = data.sliceMemUnchecked(offset, uint256(signatureCount) << 6);
@@ -1441,8 +1453,15 @@ contract WormholeVerifier is EIP712Encoding {
       require(expectedHash == initialShardDataHash, UpdateFailed(offset | MASK_UPDATE_RESULT_SHARD_DATA_MISMATCH));
 
       // Store the shard data
-      (,, uint40 shardOffset,) = _getSchnorrExtraData(keyIndex);
-      _storeShardDataBlock(shardSlot + shardOffset, shardData);
+      for (uint8 i = 0; i < signatureCount; i++) {
+        uint256 shardWriteSlot = _shardMapMemberSlot(shardSlot, keyIndex, i);
+        assembly ("memory-safe") { sstore(shardWriteSlot, calldataload(offset)) }
+        offset += LENGTH_WORD;
+
+        uint256 idWriteSlot = _shardMapMemberSlot(idSlot, keyIndex, i);
+        assembly ("memory-safe") { sstore(idWriteSlot, calldataload(offset)) }
+        offset += LENGTH_WORD;
+      }
 
       // Bounds check on data read
       require(offset == data.length, UpdateFailed(offset | MASK_UPDATE_RESULT_INVALID_DATA_LENGTH));
@@ -1486,7 +1505,7 @@ contract WormholeVerifier is EIP712Encoding {
       _appendECDSAKeyData(newECDSAKey, multisigKeyIndex, signatureCount);
 
       // Read and validate the shard data
-      _appendShardData(data, offset, SLOT_ECDSA_SHARD_DATA, newECDSAKeyIndex, signatureCount, initialShardDataHash);
+      _appendShardData(data, offset, SLOT_ECDSA_SHARD_MAP_SHARD, SLOT_ECDSA_SHARD_MAP_ID, newECDSAKeyIndex, signatureCount, initialShardDataHash);
     }
   }
 
@@ -1528,7 +1547,7 @@ contract WormholeVerifier is EIP712Encoding {
       _appendSchnorrKeyData(newSchnorrKey, multisigKeyIndex, signatureCount);
 
       // Read and validate the shard data
-      _appendShardData(data, offset, SLOT_SCHNORR_SHARD_DATA, newSchnorrKeyIndex, signatureCount, initialShardDataHash);
+      _appendShardData(data, offset, SLOT_SCHNORR_SHARD_MAP_SHARD, SLOT_SCHNORR_SHARD_MAP_ID, newSchnorrKeyIndex, signatureCount, initialShardDataHash);
     }
   }
 
@@ -1658,30 +1677,14 @@ contract WormholeVerifier is EIP712Encoding {
     }
   }
 
-  function _getSchnorrExtraData(uint32 index) internal view returns (uint32 expirationTime, uint8 shardCount, uint40 shardBase, uint32 multisigKeyIndex) {
+  function _getSchnorrExtraData(uint32 index) internal view returns (uint32 expirationTime, uint8 shardCount, uint32 multisigKeyIndex) {
     uint256 extraDataSlot = SLOT_SCHNORR_EXTRA_DATA + index;
     uint256 storageWord;
     assembly ("memory-safe") { storageWord := sload(extraDataSlot) }
 
     expirationTime   = uint32( storageWord                                           & MASK_SCHNORR_EXTRA_EXPIRATION_TIME);
     shardCount       = uint8 ((storageWord >> SHIFT_SCHNORR_EXTRA_SHARD_COUNT)       & MASK_SCHNORR_EXTRA_SHARD_COUNT    );
-    shardBase        = uint40((storageWord >> SHIFT_SCHNORR_EXTRA_SHARD_BASE )       & MASK_SCHNORR_EXTRA_SHARD_BASE     );
     multisigKeyIndex = uint32( storageWord >> SHIFT_SCHNORR_EXTRA_MULTISIG_KEY_INDEX                                     );
-  }
-
-  function _getShardDataExport(uint256 shardDataSlot, uint40 shardBase, uint8 shardCount) internal view returns (bytes memory shardData) {
-    // 32 bytes for the shard + 32 for the ID
-    uint256 entries = shardCount * 2;
-    shardData = new bytes(entries * LENGTH_WORD);
-
-    for (uint i = 0; i < entries; ++i) {
-      uint256 memoryOffset = (i + 1) * LENGTH_WORD;
-      uint256 readSlot = shardDataSlot + shardBase + i * LENGTH_WORD;
-      assembly ("memory-safe") {
-        let entry := sload(readSlot)
-        mstore(add(shardData, memoryOffset), entry)
-      }
-    }
   }
 
   function _setSchnorrExpirationTime(uint32 index, uint32 expirationTime) internal {
@@ -1693,47 +1696,25 @@ contract WormholeVerifier is EIP712Encoding {
     assembly ("memory-safe") { sstore(schnorrDataSlot, newEntry) }
   }
 
-  function _setSchnorrShardId(uint40 shardBase, uint8 signerIndex, bytes32 newSchnorrId) internal {
-    uint256 shardIdSlot = SLOT_SCHNORR_SHARD_DATA + shardBase + (signerIndex * 2 + 1) * LENGTH_WORD;
-    assembly ("memory-safe") {
-      sstore(shardIdSlot, newSchnorrId)
-    }
-  }
-  
-  function _appendSchnorrKeyData(uint256 pubkey, uint32 multisigKeyIndex, uint8 shardCount) internal {
+  function _appendSchnorrKeyData(
+    uint256 pubkey,
+    uint32 multisigKeyIndex,
+    uint8 shardCount
+  ) internal {
     uint32 keyIndex = _getSchnorrKeyCount();
     // Append the key data
     uint256 pubkeySlot = SLOT_SCHNORR_KEY_DATA + keyIndex;
     assembly ("memory-safe") { sstore(pubkeySlot, pubkey) }
 
-    uint40 shardBase;
-    assembly ("memory-safe") { shardBase := sload(SLOT_SCHNORR_SHARD_COUNT) }
-
-    // Append the extra data
+    // Append the extra data(expiration time = 0)
+    uint256 extraDataSlot = SLOT_SCHNORR_EXTRA_DATA + keyIndex;
     uint256 extraInfo =
         uint256(shardCount      ) << SHIFT_SCHNORR_EXTRA_SHARD_COUNT
-      | uint256(shardBase       ) << SHIFT_SCHNORR_EXTRA_SHARD_BASE
       | uint256(multisigKeyIndex) << SHIFT_SCHNORR_EXTRA_MULTISIG_KEY_INDEX;
-
-    uint256 extraDataSlot = SLOT_SCHNORR_EXTRA_DATA + keyIndex;
     assembly ("memory-safe") { sstore(extraDataSlot, extraInfo) }
 
     // Update the lengths
-    uint256 newShardBase = shardBase + (uint256(shardCount) << 1);
-    assembly ("memory-safe") { sstore(SLOT_SCHNORR_SHARD_COUNT, newShardBase) }
     _updateSchnorrKeyCount(keyIndex + 1);
-  }
-
-  function _storeShardDataBlock(uint256 shardSlot, bytes memory shardData) internal {
-    uint256 entries = shardData.length / LENGTH_WORD;
-    for (uint i = 0; i < entries; ++i) {
-      uint256 memoryOffset = (i + 1) * LENGTH_WORD;
-      uint256 writeSlot = shardSlot + i * LENGTH_WORD;
-      assembly ("memory-safe") {
-        let entry := mload(add(shardData, memoryOffset))
-        sstore(writeSlot, entry)
-      }
-    }
   }
 
   // Internal ecdsa state access functions
@@ -1760,14 +1741,12 @@ contract WormholeVerifier is EIP712Encoding {
   }
 
   function _getECDSAExtraData(uint32 index) internal view returns (
-    uint40 shardBase,
     uint8 shardCount,
     uint32 multisigKeyIndex
   ) {
     assembly ("memory-safe") {
       let entry := sload(add(SLOT_ECDSA_EXTRA_DATA, index))
-      shardBase := and(entry, MASK_ECDSA_ENTRY_SHARD_BASE)
-      shardCount := and(shr(SHIFT_ECDSA_ENTRY_SHARD_COUNT, entry), MASK_ECDSA_ENTRY_SHARD_COUNT)
+      shardCount := and(entry, MASK_ECDSA_ENTRY_SHARD_COUNT)
       multisigKeyIndex := shr(SHIFT_ECDSA_ENTRY_MULTISIG_KEY_INDEX, entry)
     }
   }
@@ -1781,39 +1760,49 @@ contract WormholeVerifier is EIP712Encoding {
     assembly ("memory-safe") { sstore(ecdsaDataSlot, newEntry) }
   }
 
-  function _setECDSAShardId(uint40 shardBase, uint8 signerIndex, bytes32 newECDSAId) internal {
-    uint256 shardIdSlot = SLOT_ECDSA_SHARD_DATA + shardBase + (signerIndex * 2 + 1) * LENGTH_WORD;
-    assembly ("memory-safe") {
-      sstore(shardIdSlot, newECDSAId)
-    }
-  }
-
   function _appendECDSAKeyData(address pubkey, uint32 multisigKeyIndex, uint8 shardCount) internal {
     uint32 keyIndex = _getECDSAKeyCount();
-    // Append the key data
+    // Append the key data(expiration time = 0)
     uint256 pubkeySlot = SLOT_ECDSA_KEY_DATA + keyIndex;
     uint256 pubkeyData = uint256(uint160(pubkey)) << SHIFT_ECDSA_ENTRY_PUBKEY;
     assembly ("memory-safe") { sstore(pubkeySlot, pubkeyData) }
 
-    uint40 shardBase;
-    assembly ("memory-safe") { shardBase := sload(SLOT_ECDSA_SHARD_COUNT) }
-
     // Append the extra data
-    uint256 extraInfo = shardBase
-      | (uint256(shardCount) << SHIFT_ECDSA_ENTRY_SHARD_COUNT)
-      | (uint256(multisigKeyIndex) << SHIFT_ECDSA_ENTRY_MULTISIG_KEY_INDEX);
-
     uint256 extraDataSlot = SLOT_ECDSA_EXTRA_DATA + keyIndex;
+    uint256 extraInfo = uint256(shardCount) | (uint256(multisigKeyIndex) << SHIFT_ECDSA_ENTRY_MULTISIG_KEY_INDEX);
     assembly ("memory-safe") { sstore(extraDataSlot, extraInfo) }
 
-    // Update the lengths
-    uint256 newShardBase = shardBase + (uint256(shardCount) << 1);
-    assembly ("memory-safe") { sstore(SLOT_ECDSA_SHARD_COUNT, newShardBase) }
     _updateECDSAKeyCount(keyIndex + 1);
   }
 
+  // Internal common shard state access functions
+  function _shardMapMemberSlot(uint256 base, uint32 keyIndex, uint8 signerIndex) internal pure returns (uint256) {
+    return base | (keyIndex << 8) | signerIndex;
+  }
+
+  function _getShardDataExport(uint256 shardSlot, uint256 idSlot, uint32 keyIndex, uint8 shardCount) internal view returns (bytes memory shardData) {
+    shardData = new bytes(shardCount << 6); // 32 bytes for the shard + 32 for the ID
+
+    for (uint8 i = 0; i < shardCount; ++i) {
+      uint256 twiceIndex = i << 1; // To adjust for the fact that we're storing pairs of words
+      uint256 shardWriteOffset = (twiceIndex + 1) * LENGTH_WORD; // Offset by 1 to skip the array length word
+      uint256 idWriteOffset = (twiceIndex + 2) * LENGTH_WORD;
+      uint256 shardReadSlot = _shardMapMemberSlot(shardSlot, keyIndex, i);
+      uint256 idReadSlot = _shardMapMemberSlot(idSlot, keyIndex, i);
+      assembly ("memory-safe") {
+        mstore(add(shardData, shardWriteOffset), sload(shardReadSlot))
+        mstore(add(shardData, idWriteOffset), sload(idReadSlot))
+      }
+    }
+  }
+
+  function _setShardId(uint256 idSlot, uint32 keyIndex, uint8 signerIndex, bytes32 id) internal {
+    uint256 writeSlot = _shardMapMemberSlot(idSlot, keyIndex, signerIndex);
+    assembly ("memory-safe") { sstore(writeSlot, id) }
+  }
+
   function _useUnorderedNonce(uint32 keyIndex, uint8 signerIndex, uint32 nonce, uint256 baseOffset) internal {
-    uint256 nonceSlot = SLOT_NONCE_BITMAP | (keyIndex << 32) | (signerIndex << 24) | (nonce >> 8);
+    uint256 nonceSlot = SLOT_SCHNORR_NONCE_BITMAP | (keyIndex << 32) | (signerIndex << 24) | (nonce >> 8);
     uint256 oldEntry;
     assembly ("memory-safe") { oldEntry := sload(nonceSlot) }
 

@@ -997,6 +997,48 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     vm.assertEq(success, false);
     vm.assertEq(data.length, 4+32);
   }
+
+  function test_verifyBatchEmpty() public {
+    bool success;
+    bytes memory data;
+    
+    (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
+      VERIFY_ANY
+    ));
+    vm.assertEq(success, false);
+    vm.assertEq(data.length, 4+32);
+
+    (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
+      VERIFY_SCHNORR
+    ));
+    vm.assertEq(success, false);
+    vm.assertEq(data.length, 4+32);
+
+    (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
+      VERIFY_MULTISIG
+    ));
+    vm.assertEq(success, false);
+    vm.assertEq(data.length, 4+32);
+
+    (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
+      VERIFY_SCHNORR_UNIFORM,
+      uint32(0) // Key index
+    ));
+    vm.assertEq(success, false);
+    vm.assertEq(data.length, 4+32);
+
+    (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
+      VERIFY_MULTISIG_UNIFORM,
+      uint32(0) // Key index
+    ));
+    vm.assertEq(success, false);
+    vm.assertEq(data.length, 4+32);
+  }
 }
 
 contract TestAssembly2 is VerificationTestAPI {
