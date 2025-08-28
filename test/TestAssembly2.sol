@@ -562,7 +562,7 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
   bytes private batchECDSAUniformMessage;
 
   WormholeV1Mock private immutable _wormholeV1Mock = new WormholeV1Mock();
-  WormholeVerifier private immutable _wormholeVerifierV2 = new WormholeVerifier(_wormholeV1Mock, 0, 0, 0, new bytes(0));
+  WormholeVerifier private immutable _wormholeVerifierV2 = new WormholeVerifier(_wormholeV1Mock, 0, 0, 0, 0, new bytes(0), new bytes(0));
 
   function setUpMessages1(bytes memory smallEnvelope, bytes memory bigEnvelope, uint256[] memory guardianPrivateKeysSlice) internal {
     // Generate signed VAAs for the protocols where we can sign the message from Solidity
@@ -833,28 +833,28 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
   function test_updateSchnorrShardIdInvalidKeyIndex() public {
     bytes32 id = bytes32(vm.randomUint());
     bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 2, 1, id, 0, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SCHNORR_KEY_INDEX | 1));
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SCHNORR_KEY_INDEX));
     _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
   }
 
   function test_updateSchnorrShardIdInvalidNonce() public {
     bytes32 id = bytes32(vm.randomUint());
     bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_NONCE_ALREADY_CONSUMED | 0x6C));
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_NONCE_ALREADY_CONSUMED | (1 + signedMessage.length)));
     _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage, UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
   }
 
   function test_updateSchnorrShardIdInvalidSignerIndex() public {
     bytes32 id = bytes32(vm.randomUint());
     bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0xFF, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX | 1));
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX));
     _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
   }
 
   function test_updateSchnorrShardIdInvalidSignature() public {
     bytes32 id = bytes32(vm.randomUint());
     bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[1]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_SIGNATURE_MISMATCH | 1));
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_SIGNATURE_MISMATCH));
     _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
   }
 
@@ -867,28 +867,28 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
   function test_updateECDSAShardIdInvalidKeyIndex() public {
     bytes32 id = bytes32(vm.randomUint());
     bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX | 1));
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX));
     _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
   }
 
   function test_updateECDSAShardIdInvalidNonce() public {
     bytes32 id = bytes32(vm.randomUint());
     bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 0, 1, id, 0, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_NONCE_ALREADY_CONSUMED | 0x6C));
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_NONCE_ALREADY_CONSUMED | (1 + signedMessage.length)));
     _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage, UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
   }
 
   function test_updateECDSAShardIdInvalidSignerIndex() public {
     bytes32 id = bytes32(vm.randomUint());
     bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 0, 1, id, 0xFF, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX | 1));
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX));
     _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
   }
 
   function test_updateECDSAShardIdInvalidSignature() public {
     bytes32 id = bytes32(vm.randomUint());
     bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 0, 1, id, 0, guardianPrivateKeys[1]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_SIGNATURE_MISMATCH | 1));
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_SIGNATURE_MISMATCH));
     _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
   }
 
@@ -1085,7 +1085,7 @@ contract TestAssembly2 is VerificationTestAPI {
   );
 
   WormholeV1Mock private immutable _wormholeV1Mock = new WormholeV1Mock();
-  WormholeVerifier private immutable _wormholeVerifierV2 = new WormholeVerifier(_wormholeV1Mock, 0, 0, 0, new bytes(0));
+  WormholeVerifier private immutable _wormholeVerifierV2 = new WormholeVerifier(_wormholeV1Mock, 0, 0, 0, 0, new bytes(0), new bytes(0));
 
   function setUp() public {
     // Generate the guardian sets
@@ -1331,7 +1331,7 @@ contract TestAssembly2 is VerificationTestAPI {
     }));
 
     uint32 initGuardianSetIndex = 2;
-    WormholeVerifier tempVerifier = new WormholeVerifier(wormholeMock, initGuardianSetIndex, 0, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(wormholeMock, initGuardianSetIndex, 0, 0, 1, new bytes(0), new bytes(0));
 
     // small multisig VAA has guardian set 0 in the header
     vm.expectRevert(abi.encodeWithSelector(
@@ -1371,7 +1371,7 @@ contract TestAssembly2 is VerificationTestAPI {
 
   function test_appendSchnorrKey_canSkipIndicesOnDeploy() public {
     uint32 schnorrKeyIndex2 = 3;
-    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, schnorrKeyIndex2, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, schnorrKeyIndex2, 0, 1, new bytes(0), new bytes(0));
 
     bytes32 schnorrShardDataHash = keccak256(schnorrShardsRaw);
 
@@ -1384,11 +1384,11 @@ contract TestAssembly2 is VerificationTestAPI {
 
   function test_appendSchnorrKey_deployCanPreventSubmissionOfOldIndices() public {
     uint32 initialSchnorrKeyIndex = 3;
-    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, initialSchnorrKeyIndex, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, initialSchnorrKeyIndex, 0, 1, new bytes(0), new bytes(0));
 
     vm.expectRevert(abi.encodeWithSelector(
       WormholeVerifier.UpdateFailed.selector,
-      MASK_UPDATE_RESULT_INVALID_KEY_INDEX | 0xe8
+      MASK_UPDATE_RESULT_INVALID_KEY_INDEX
     ));
     appendSchnorrKey(tempVerifier, appendSchnorrKeyVaa1, schnorrShardsRaw);
   }
@@ -1407,7 +1407,7 @@ contract TestAssembly2 is VerificationTestAPI {
 
     vm.expectRevert(abi.encodeWithSelector(
       WormholeVerifier.UpdateFailed.selector,
-      MASK_UPDATE_RESULT_INVALID_KEY_INDEX | 0xe8
+      MASK_UPDATE_RESULT_INVALID_KEY_INDEX
     ));
     appendSchnorrKey(_wormholeVerifierV2, appendSchnorrKeyVaa1, schnorrShardsRaw);
   }
@@ -1427,14 +1427,14 @@ contract TestAssembly2 is VerificationTestAPI {
 
     vm.expectRevert(abi.encodeWithSelector(
       WormholeVerifier.UpdateFailed.selector,
-      MASK_UPDATE_RESULT_INVALID_KEY_INDEX | 0xe8
+      MASK_UPDATE_RESULT_INVALID_KEY_INDEX
     ));
     appendSchnorrKey(_wormholeVerifierV2, appendSchnorrKeyVaa3, schnorrShardsRaw);
   }
 
   function testRevert_appendMaxSchnorrKey() public {
     uint32 schnorrKeyIndex = type(uint32).max;
-    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, schnorrKeyIndex, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, schnorrKeyIndex, 0, 1, new bytes(0), new bytes(0));
 
     bytes32 schnorrShardDataHash = keccak256(schnorrShardsRaw);
 
@@ -1444,7 +1444,7 @@ contract TestAssembly2 is VerificationTestAPI {
 
     vm.expectRevert(abi.encodeWithSelector(
       WormholeVerifier.UpdateFailed.selector,
-      MASK_UPDATE_RESULT_INVALID_KEY_INDEX | 0xe8
+      MASK_UPDATE_RESULT_INVALID_KEY_INDEX
     ));
     appendSchnorrKey(tempVerifier, appendSchnorrKeyVaa3, schnorrShardsRaw);
   }
@@ -1529,7 +1529,7 @@ contract TestAssembly2 is VerificationTestAPI {
   }
 
   function test_verifyVaaV2_skippedKey() public {
-    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, 1, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, 1, 0, 1, new bytes(0), new bytes(0));
     pullGuardianSets(tempVerifier, 1);
     appendSchnorrKey(tempVerifier, appendSchnorrKeyVaa2, schnorrShardsRaw);
 
