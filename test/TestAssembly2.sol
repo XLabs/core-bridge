@@ -19,11 +19,14 @@ import {
 
   MODULE_VERIFICATION_V2,
   ACTION_APPEND_SCHNORR_KEY,
+  ACTION_APPEND_ECDSA_KEY,
   GOVERNANCE_ADDRESS,
 
   UPDATE_PULL_MULTISIG_KEY_DATA,
   UPDATE_APPEND_SCHNORR_KEY,
-  UPDATE_SET_SHARD_ID,
+  UPDATE_SET_SCHNORR_SHARD_ID,
+  UPDATE_APPEND_ECDSA_KEY,
+  UPDATE_SET_ECDSA_SHARD_ID,
 
   MASK_UPDATE_RESULT_INVALID_SCHNORR_KEY_INDEX,
   MASK_UPDATE_RESULT_NONCE_ALREADY_CONSUMED,
@@ -32,6 +35,7 @@ import {
   MASK_UPDATE_RESULT_INVALID_KEY_INDEX,
   MASK_UPDATE_RESULT_INVALID_SCHNORR_KEY,
   MASK_UPDATE_RESULT_SHARD_DATA_MISMATCH,
+  MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX,
 
   MASK_VERIFY_RESULT_INVALID_VERSION,
   MASK_VERIFY_RESULT_SIGNATURE_MISMATCH,
@@ -45,6 +49,8 @@ import {
   VERIFY_MULTISIG_UNIFORM,
   VERIFY_SCHNORR,
   VERIFY_SCHNORR_UNIFORM,
+  VERIFY_ECDSA,
+  VERIFY_ECDSA_UNIFORM,
 
   GET_CURRENT_SCHNORR_KEY_DATA,
   GET_CURRENT_MULTISIG_KEY_DATA,
@@ -84,6 +90,24 @@ abstract contract VerificationMessageBuilder {
       newSchnorrKeyIndex,
       expectedMultisigKeyIndex,
       newSchnorrPubkey,
+      expirationDelaySeconds,
+      initialShardDataHash
+    );
+  }
+
+  function newAppendECDSAKeyMessage(
+    uint32 newECDSAKeyIndex,
+    uint32 expectedMultisigKeyIndex,
+    address newECDSAPubkey,
+    uint32 expirationDelaySeconds,
+    bytes32 initialShardDataHash
+  ) internal pure returns (bytes memory) {
+    return abi.encodePacked(
+      MODULE_VERIFICATION_V2,
+      ACTION_APPEND_ECDSA_KEY,
+      newECDSAKeyIndex,
+      expectedMultisigKeyIndex,
+      newECDSAPubkey,
       expirationDelaySeconds,
       initialShardDataHash
     );
@@ -143,6 +167,19 @@ abstract contract VerificationMessageBuilder {
       envelope
     );
   }
+
+  function newECDSAVaa(
+    uint32 keyIndex,
+    bytes memory signature,
+    bytes memory envelope
+  ) public pure returns (bytes memory) {
+    return abi.encodePacked(
+      uint8(3), // version
+      keyIndex,
+      signature,
+      envelope
+    );
+  }
 }
 
 abstract contract VerificationTestAPI is Test, VerificationMessageBuilder {
@@ -183,7 +220,36 @@ abstract contract VerificationTestAPI is Test, VerificationMessageBuilder {
     return signMultisig(getEnvelopeDigest(envelope), privateKeys);
   }
 
-  function signUpdateShardIdMessage(
+  function signECDSA(bytes memory envelope, uint256 privateKey) internal pure returns (bytes memory signature) {
+    bytes32 digest = getEnvelopeDigest(envelope);
+    (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+    return abi.encodePacked(r, s, v - 27);
+  }
+
+  function signUpdateSchnorrShardIdMessage(
+    WormholeVerifier wormholeVerifier,
+    uint32 keyIndex,
+    uint32 nonce,
+    bytes32 shardId,
+    uint8 signerIndex,
+    uint256 privateKey
+  ) internal view returns (bytes memory signedMessage) {
+    bytes32 digest = wormholeVerifier.getRegisterGuardianDigest(keyIndex, nonce, shardId);
+
+    (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+
+    return abi.encodePacked(
+      keyIndex,
+      nonce,
+      shardId,
+      signerIndex,
+      r,
+      s,
+      v - 27
+    );
+  }
+
+  function signUpdateECDSAShardIdMessage(
     WormholeVerifier wormholeVerifier,
     uint32 keyIndex,
     uint32 nonce,
@@ -222,6 +288,21 @@ abstract contract VerificationTestAPI is Test, VerificationMessageBuilder {
   ) public {
     bytes memory message = abi.encodePacked(
       UPDATE_APPEND_SCHNORR_KEY,
+      uint16(appendVaa.length + shards.length),
+      appendVaa,
+      shards
+    );
+
+    verifier.update(message);
+  }
+
+  function appendECDSAKey(
+    WormholeVerifier verifier,
+    bytes memory appendVaa,
+    bytes memory shards
+  ) public {
+    bytes memory message = abi.encodePacked(
+      UPDATE_APPEND_ECDSA_KEY,
       uint16(appendVaa.length + shards.length),
       appendVaa,
       shards
@@ -457,39 +538,48 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
 
   uint256[] private schnorrPublicKeys;
 
+  uint256[] private ecdsaPrivateKeys;
+  address[] private ecdsaPublicKeys;
+
   bytes private smallMultisigVaa;
   bytes private bigMultisigVaa;
   bytes private smallSchnorrVaa;
   bytes private bigSchnorrVaa;
+  bytes private smallECDSAVaa;
+  bytes private bigECDSAVaa;
 
   bytes private invalidVersionVaa;
   bytes private invalidMultisigVaa;
   bytes private invalidSchnorrVaa;
+  bytes private invalidECDSAVaa;
 
   bytes private batchMessage;
   bytes private batchMultisigMessage;
   bytes private batchSchnorrMessage;
+  bytes private batchECDSAMessage;
   bytes private batchMultisigUniformMessage;
   bytes private batchSchnorrUniformMessage;
+  bytes private batchECDSAUniformMessage;
 
   WormholeV1Mock private immutable _wormholeV1Mock = new WormholeV1Mock();
-  WormholeVerifier private immutable _wormholeVerifierV2 = new WormholeVerifier(_wormholeV1Mock, 0, 0, 0, new bytes(0));
+  WormholeVerifier private immutable _wormholeVerifierV2 = new WormholeVerifier(_wormholeV1Mock, 0, 0, 0, 0, new bytes(0), new bytes(0));
 
   function setUpMessages1(bytes memory smallEnvelope, bytes memory bigEnvelope, uint256[] memory guardianPrivateKeysSlice) internal {
+    // Generate signed VAAs for the protocols where we can sign the message from Solidity
     bytes memory smallMultisigSignatures = signMultisig(smallEnvelope, guardianPrivateKeysSlice);
-    smallMultisigVaa = newMultisigVaa(0, smallMultisigSignatures, smallEnvelope);
-
-    smallSchnorrVaa = newSchnorrVaa(0, R1, S1, smallEnvelope);
-
     bytes memory bigMultisigSignatures = signMultisig(bigEnvelope, guardianPrivateKeysSlice);
+    smallMultisigVaa = newMultisigVaa(0, smallMultisigSignatures, smallEnvelope);
     bigMultisigVaa = newMultisigVaa(0, bigMultisigSignatures, bigEnvelope);
-
+    
+    smallSchnorrVaa = newSchnorrVaa(0, R1, S1, smallEnvelope);
     bigSchnorrVaa = newSchnorrVaa(1, R2, S2, bigEnvelope);
 
-    schnorrPublicKeys = new uint256[](2);
-    schnorrPublicKeys[0] = PK1;
-    schnorrPublicKeys[1] = PK2;
+    bytes memory smallECDSASignature = signECDSA(smallEnvelope, ecdsaPrivateKeys[0]);
+    bytes memory bigECDSASignature = signECDSA(bigEnvelope, ecdsaPrivateKeys[0]);
+    smallECDSAVaa = newECDSAVaa(0, smallECDSASignature, smallEnvelope);
+    bigECDSAVaa = newECDSAVaa(0, bigECDSASignature, bigEnvelope);
 
+    // Generate invalid VAAs
     invalidVersionVaa = new bytes(100);
 
     invalidMultisigVaa = new bytes(100);
@@ -498,20 +588,30 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     invalidSchnorrVaa = new bytes(100);
     invalidSchnorrVaa[0] = 0x02;
 
+    invalidECDSAVaa = new bytes(100);
+    invalidECDSAVaa[0] = 0x03;
+
     uint256 multisigVaaHeaderLength2 = 4+1+66*SHARD_QUORUM;
     uint256 schnorrVaaHeaderLength2 = 4+20+32;
+    uint256 ecdsaVaaHeaderLength2 = 4+32+32+1;
 
     bytes memory smallMultisigVaaHeader2;
-    (smallMultisigVaaHeader2,) = smallMultisigVaa.sliceMemUnchecked(1, multisigVaaHeaderLength2);
-    bytes memory smallSchnorrVaaHeader2 = new bytes(schnorrVaaHeaderLength2);
     bytes memory bigMultisigVaaHeader2;
+    (smallMultisigVaaHeader2,) = smallMultisigVaa.sliceMemUnchecked(1, multisigVaaHeaderLength2);
     (bigMultisigVaaHeader2,) = bigMultisigVaa.sliceMemUnchecked(1, multisigVaaHeaderLength2);
-    bytes memory bigSchnorrVaaHeader2 = new bytes(schnorrVaaHeaderLength2);
 
+    bytes memory smallSchnorrVaaHeader2 = new bytes(schnorrVaaHeaderLength2);
+    bytes memory bigSchnorrVaaHeader2 = new bytes(schnorrVaaHeaderLength2);
+    
     for (uint256 i = 0; i < schnorrVaaHeaderLength2; i++) {
       smallSchnorrVaaHeader2[i] = smallSchnorrVaa[i + 1];
       bigSchnorrVaaHeader2[i] = bigSchnorrVaa[i + 1];
     }
+
+    bytes memory smallECDSAVaaHeader2 = new bytes(ecdsaVaaHeaderLength2);
+    bytes memory bigECDSAVaaHeader2 = new bytes(ecdsaVaaHeaderLength2);
+    (smallECDSAVaaHeader2,) = smallECDSAVaa.sliceMemUnchecked(1, ecdsaVaaHeaderLength2);
+    (bigECDSAVaaHeader2,) = bigECDSAVaa.sliceMemUnchecked(1, ecdsaVaaHeaderLength2);
 
     batchMultisigMessage = abi.encodePacked(
       WormholeVerifier.verifyBatch.selector,
@@ -539,11 +639,26 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
       getEnvelopeDigest(bigEnvelope)
     );
 
+    batchECDSAMessage = abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
+      VERIFY_ECDSA,
+      smallECDSAVaaHeader2,
+      getEnvelopeDigest(smallEnvelope),
+      bigECDSAVaaHeader2,
+      getEnvelopeDigest(bigEnvelope),
+      bigECDSAVaaHeader2,
+      getEnvelopeDigest(bigEnvelope),
+      bigECDSAVaaHeader2,
+      getEnvelopeDigest(bigEnvelope)
+    );
+
     uint256 multisigVaaHeaderLength3 = 1+66*SHARD_QUORUM;
     uint256 schnorrVaaHeaderLength3 = 20+32;
+    uint256 ecdsaVaaHeaderLength3 = 32+32+1;
 
     bytes memory smallMultisigVaaHeader3 = new bytes(multisigVaaHeaderLength3);
     bytes memory smallSchnorrVaaHeader3 = new bytes(schnorrVaaHeaderLength3);
+    bytes memory smallECDSAVaaHeader3 = new bytes(ecdsaVaaHeaderLength3);
 
     for (uint256 i = 0; i < multisigVaaHeaderLength3; i++) {
       smallMultisigVaaHeader3[i] = smallMultisigVaa[i];
@@ -551,6 +666,10 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
 
     for (uint256 i = 0; i < schnorrVaaHeaderLength3; i++) {
       smallSchnorrVaaHeader3[i] = smallSchnorrVaa[i];
+    }
+
+    for (uint256 i = 0; i < ecdsaVaaHeaderLength3; i++) {
+      smallECDSAVaaHeader3[i] = smallECDSAVaa[i];
     }
 
     batchMultisigUniformMessage = abi.encodePacked(
@@ -570,6 +689,16 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
       smallSchnorrVaaHeader3,
       getEnvelopeDigest(smallEnvelope),
       smallSchnorrVaaHeader3,
+      getEnvelopeDigest(smallEnvelope)
+    );
+
+    batchECDSAUniformMessage = abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
+      VERIFY_ECDSA_UNIFORM,
+      uint32(0),
+      smallECDSAVaaHeader3,
+      getEnvelopeDigest(smallEnvelope),
+      smallECDSAVaaHeader3,
       getEnvelopeDigest(smallEnvelope)
     );
   }
@@ -593,15 +722,28 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
       bigSchnorrVaaHeader[i] = bigSchnorrVaa[i];
     }
 
+    uint256 ecdsaVaaHeaderLength = 1+4+32+32+1;
+    bytes memory smallECDSAVaaHeader = new bytes(ecdsaVaaHeaderLength);
+    bytes memory bigECDSAVaaHeader = new bytes(ecdsaVaaHeaderLength);
+
+    for (uint256 i = 0; i < ecdsaVaaHeaderLength; i++) {
+      smallECDSAVaaHeader[i] = smallECDSAVaa[i];
+      bigECDSAVaaHeader[i] = bigECDSAVaa[i];
+    }
+
     batchMessage = abi.encodePacked(
       VERIFY_ANY,
       smallMultisigVaaHeader,
       getEnvelopeDigest(smallEnvelope),
       smallSchnorrVaaHeader,
       getEnvelopeDigest(smallEnvelope),
+      smallECDSAVaaHeader,
+      getEnvelopeDigest(smallEnvelope),
       bigMultisigVaaHeader,
       getEnvelopeDigest(bigEnvelope),
       bigSchnorrVaaHeader,
+      getEnvelopeDigest(bigEnvelope),
+      bigECDSAVaaHeader,
       getEnvelopeDigest(bigEnvelope)
     );
   }
@@ -621,6 +763,14 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     for (uint256 i = 0; i < SHARD_QUORUM; i++) {
       guardianPrivateKeysSlice[i] = guardianPrivateKeys[i];
     }
+
+    // Set up the schnorr keys
+    schnorrPublicKeys = new uint256[](2);
+    schnorrPublicKeys[0] = PK1;
+    schnorrPublicKeys[1] = PK2;
+
+    // Set up the ecdsa keys
+    (ecdsaPrivateKeys, ecdsaPublicKeys) = newKeySet(1);
 
     bytes memory smallEnvelope = new bytes(100);
     bytes memory bigEnvelope = new bytes(5000);
@@ -650,6 +800,10 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     bytes memory appendSchnorrKeyEnvelope2 = newVaaEnvelope(uint32(block.timestamp), 0, CHAIN_ID_SOLANA, GOVERNANCE_ADDRESS, 0, 0, appendSchnorrKeyMessage2);
     bytes memory appendSchnorrKeyVaa2 = newMultisigVaa(0, signMultisig(appendSchnorrKeyEnvelope2, guardianPrivateKeys), appendSchnorrKeyEnvelope2);
 
+    bytes memory appendECDSAMessage1 = newAppendECDSAKeyMessage(0, 0, ecdsaPublicKeys[0], 0, schnorrShardDataHash);
+    bytes memory appendECDSAEnvelope1 = newVaaEnvelope(uint32(block.timestamp), 0, CHAIN_ID_SOLANA, GOVERNANCE_ADDRESS, 0, 0, appendECDSAMessage1);
+    bytes memory appendECDSAVaa1 = newMultisigVaa(0, signMultisig(appendECDSAEnvelope1, guardianPrivateKeys), appendECDSAEnvelope1);
+
     bytes memory message = abi.encodePacked(
       UPDATE_PULL_MULTISIG_KEY_DATA,
       uint32(1),
@@ -660,44 +814,82 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
       UPDATE_APPEND_SCHNORR_KEY,
       uint16(appendSchnorrKeyVaa2.length + schnorrShardsRaw.length),
       appendSchnorrKeyVaa2,
+      schnorrShardsRaw,
+      UPDATE_APPEND_ECDSA_KEY,
+      uint16(appendECDSAVaa1.length + schnorrShardsRaw.length),
+      appendECDSAVaa1,
       schnorrShardsRaw
     );
 
     _wormholeVerifierV2.update(message);
   }
 
-  function test_updateShardId_success() public {
+  function test_updateSchnorrShardId_success() public {
     bytes32 id = bytes32(vm.randomUint());
-    bytes memory signedMessage = signUpdateShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[0]);
-    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SHARD_ID, signedMessage));
+    bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[0]);
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
   }
 
-  function test_updateShardIdInvalidKeyIndex() public {
+  function test_updateSchnorrShardIdInvalidKeyIndex() public {
     bytes32 id = bytes32(vm.randomUint());
-    bytes memory signedMessage = signUpdateShardIdMessage(_wormholeVerifierV2, 2, 1, id, 0, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SCHNORR_KEY_INDEX | 1));
-    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SHARD_ID, signedMessage));
+    bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 2, 1, id, 0, guardianPrivateKeys[0]);
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SCHNORR_KEY_INDEX));
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
   }
 
-  function test_updateShardIdInvalidNonce() public {
+  function test_updateSchnorrShardIdInvalidNonce() public {
     bytes32 id = bytes32(vm.randomUint());
-    bytes memory signedMessage = signUpdateShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_NONCE_ALREADY_CONSUMED | 0x6C));
-    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SHARD_ID, signedMessage, UPDATE_SET_SHARD_ID, signedMessage));
+    bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[0]);
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_NONCE_ALREADY_CONSUMED | (1 + signedMessage.length)));
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage, UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
   }
 
-  function test_updateShardIdInvalidSignerIndex() public {
+  function test_updateSchnorrShardIdInvalidSignerIndex() public {
     bytes32 id = bytes32(vm.randomUint());
-    bytes memory signedMessage = signUpdateShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0xFF, guardianPrivateKeys[0]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX | 1));
-    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SHARD_ID, signedMessage));
+    bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0xFF, guardianPrivateKeys[0]);
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX));
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
   }
 
-  function test_updateShardIdInvalidSignature() public {
+  function test_updateSchnorrShardIdInvalidSignature() public {
     bytes32 id = bytes32(vm.randomUint());
-    bytes memory signedMessage = signUpdateShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[1]);
-    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_SIGNATURE_MISMATCH | 1));
-    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SHARD_ID, signedMessage));
+    bytes memory signedMessage = signUpdateSchnorrShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[1]);
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_SIGNATURE_MISMATCH));
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_SCHNORR_SHARD_ID, signedMessage));
+  }
+
+  function test_updateECDSAShardId_success() public {
+    bytes32 id = bytes32(vm.randomUint());
+    bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 0, 1, id, 0, guardianPrivateKeys[0]);
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
+  }
+
+  function test_updateECDSAShardIdInvalidKeyIndex() public {
+    bytes32 id = bytes32(vm.randomUint());
+    bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 1, 1, id, 0, guardianPrivateKeys[0]);
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX));
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
+  }
+
+  function test_updateECDSAShardIdInvalidNonce() public {
+    bytes32 id = bytes32(vm.randomUint());
+    bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 0, 1, id, 0, guardianPrivateKeys[0]);
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_NONCE_ALREADY_CONSUMED | (1 + signedMessage.length)));
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage, UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
+  }
+
+  function test_updateECDSAShardIdInvalidSignerIndex() public {
+    bytes32 id = bytes32(vm.randomUint());
+    bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 0, 1, id, 0xFF, guardianPrivateKeys[0]);
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_INVALID_SIGNER_INDEX));
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
+  }
+
+  function test_updateECDSAShardIdInvalidSignature() public {
+    bytes32 id = bytes32(vm.randomUint());
+    bytes memory signedMessage = signUpdateECDSAShardIdMessage(_wormholeVerifierV2, 0, 1, id, 0, guardianPrivateKeys[1]);
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.UpdateFailed.selector, MASK_UPDATE_RESULT_SIGNATURE_MISMATCH));
+    _wormholeVerifierV2.update(abi.encodePacked(UPDATE_SET_ECDSA_SHARD_ID, signedMessage));
   }
 
   function test_benchmark_verifyMultisig() public view {
@@ -718,6 +910,15 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     vm.assertEq(payloadOffset, 1 + 4 + 20 + 32 + 4 + 4 + 2 + 32 + 8 + 1);
   }
 
+  function test_benchmark_verifyECDSA() public view {
+    (uint16 emitterChain, bytes32 emitterAddress, uint64 sequence, uint16 payloadOffset) =
+      _wormholeVerifierV2.verify(smallECDSAVaa);
+    vm.assertEq(emitterChain, 0);
+    vm.assertEq(emitterAddress, bytes32(0));
+    vm.assertEq(sequence, 0);
+    vm.assertEq(payloadOffset, 1 + 4 + 32 + 32 + 1 + 4 + 4 + 2 + 32 + 8 + 1);
+  }
+
   function test_benchmark_verifyMultisigBig() public view {
     (uint16 emitterChain, bytes32 emitterAddress, uint64 sequence, uint16 payloadOffset) =
       _wormholeVerifierV2.verify(bigMultisigVaa);
@@ -736,6 +937,15 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     vm.assertEq(payloadOffset, 1 + 4 + 20 + 32 + 4 + 4 + 2 + 32 + 8 + 1);
   }
 
+  function test_benchmark_verifyECDSABig() public view {
+    (uint16 emitterChain, bytes32 emitterAddress, uint64 sequence, uint16 payloadOffset) =
+      _wormholeVerifierV2.verify(bigECDSAVaa);
+    vm.assertEq(emitterChain, 0);
+    vm.assertEq(emitterAddress, bytes32(0));
+    vm.assertEq(sequence, 0);
+    vm.assertEq(payloadOffset, 1 + 4 + 32 + 32 + 1 + 4 + 4 + 2 + 32 + 8 + 1);
+  }
+
   function test_verifyInvalidVersion() public {
     vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.VerificationFailed.selector, MASK_VERIFY_RESULT_INVALID_VERSION));
     _wormholeVerifierV2.verify(invalidVersionVaa);
@@ -751,6 +961,11 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     _wormholeVerifierV2.verify(invalidSchnorrVaa);
   }
 
+  function test_verifyInvalidECDSA() public {
+    vm.expectRevert(abi.encodeWithSelector(WormholeVerifier.VerificationFailed.selector, MASK_VERIFY_RESULT_SIGNATURE_MISMATCH));
+    _wormholeVerifierV2.verify(invalidECDSAVaa);
+  }
+
   function test_benchmark_verifyBatchMultisig() public {
     (bool success, bytes memory data) = address(_wormholeVerifierV2).call(batchMultisigMessage);
 
@@ -760,6 +975,13 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
 
   function test_benchmark_verifyBatchSchnorr() public {
     (bool success, bytes memory data) = address(_wormholeVerifierV2).call(batchSchnorrMessage);
+
+    vm.assertEq(success, true);
+    vm.assertEq(data.length, 0);
+  }
+
+  function test_benchmark_verifyBatchECDSA() public {
+    (bool success, bytes memory data) = address(_wormholeVerifierV2).call(batchECDSAMessage);
 
     vm.assertEq(success, true);
     vm.assertEq(data.length, 0);
@@ -836,19 +1058,26 @@ contract TestAssembly2 is VerificationTestAPI {
   uint256[] private guardianPrivateKeysSet1;
   address[] private guardianPublicKeysSet1;
 
+  uint256[] private ecdsaPrivateKeys;
+  address[] private ecdsaPublicKeys;
+
   bytes private smallMultisigVaa;
   bytes private bigMultisigVaa;
   bytes private smallSchnorrVaa;
   bytes private bigSchnorrVaa;
+  bytes private smallECDSAVaa;
+  bytes private bigECDSAVaa;
 
   bytes private constant invalidVersionVaa = new bytes(100);
   bytes private invalidMultisigVaa;
   bytes private invalidSchnorrVaa;
+  bytes private invalidECDSAVaa;
 
   bytes private schnorrShardsRaw;
 
   bytes private appendSchnorrKeyVaa1;
   bytes private appendSchnorrKeyVaa2;
+  bytes private appendECDSAVaa1;
 
   bytes private pullGuardianSetMessage = abi.encodePacked(
     UPDATE_PULL_MULTISIG_KEY_DATA,
@@ -856,7 +1085,7 @@ contract TestAssembly2 is VerificationTestAPI {
   );
 
   WormholeV1Mock private immutable _wormholeV1Mock = new WormholeV1Mock();
-  WormholeVerifier private immutable _wormholeVerifierV2 = new WormholeVerifier(_wormholeV1Mock, 0, 0, 0, new bytes(0));
+  WormholeVerifier private immutable _wormholeVerifierV2 = new WormholeVerifier(_wormholeV1Mock, 0, 0, 0, 0, new bytes(0), new bytes(0));
 
   function setUp() public {
     // Generate the guardian sets
@@ -876,24 +1105,34 @@ contract TestAssembly2 is VerificationTestAPI {
       guardianPrivateKeysSlice[i] = guardianPrivateKeysSet0[i];
     }
 
+    // Generate the ecdsa keys
+    (ecdsaPrivateKeys, ecdsaPublicKeys) = newKeySet(1);
+
     // Create VAAs
     bytes memory smallEnvelope = new bytes(100);
-    bytes memory smallMultisigSignatures = signMultisig(smallEnvelope, guardianPrivateKeysSlice);
-    smallMultisigVaa = newMultisigVaa(0, smallMultisigSignatures, smallEnvelope);
-
-    smallSchnorrVaa = newSchnorrVaa(0, R1, S1, smallEnvelope);
-
     bytes memory bigEnvelope = new bytes(5000);
+    
+    bytes memory smallMultisigSignatures = signMultisig(smallEnvelope, guardianPrivateKeysSlice);
     bytes memory bigMultisigSignatures = signMultisig(bigEnvelope, guardianPrivateKeysSlice);
+    smallMultisigVaa = newMultisigVaa(0, smallMultisigSignatures, smallEnvelope);
     bigMultisigVaa = newMultisigVaa(0, bigMultisigSignatures, bigEnvelope);
 
+    smallSchnorrVaa = newSchnorrVaa(0, R1, S1, smallEnvelope);
     bigSchnorrVaa = newSchnorrVaa(1, R2, S2, bigEnvelope);
+
+    bytes memory smallECDSASignature = signECDSA(smallEnvelope, ecdsaPrivateKeys[0]);
+    bytes memory bigECDSASignature = signECDSA(bigEnvelope, ecdsaPrivateKeys[0]);
+    smallECDSAVaa = newECDSAVaa(0, smallECDSASignature, smallEnvelope);
+    bigECDSAVaa = newECDSAVaa(0, bigECDSASignature, bigEnvelope);
 
     invalidMultisigVaa = new bytes(100);
     invalidMultisigVaa[0] = 0x01;
 
     invalidSchnorrVaa = new bytes(100);
     invalidSchnorrVaa[0] = 0x02;
+
+    invalidECDSAVaa = new bytes(100);
+    invalidECDSAVaa[0] = 0x03;
 
     // Generate shard data
     ShardData[] memory schnorrShards = new ShardData[](SHARD_COUNT);
@@ -915,6 +1154,10 @@ contract TestAssembly2 is VerificationTestAPI {
     bytes memory appendSchnorrKeyMessage2 = newAppendSchnorrKeyMessage(1, 0, PK2, EXPIRATION_DELAY_SECONDS, schnorrShardDataHash);
     bytes memory appendSchnorrKeyEnvelope2 = newVaaEnvelope(uint32(block.timestamp), 0, CHAIN_ID_SOLANA, GOVERNANCE_ADDRESS, 0, 0, appendSchnorrKeyMessage2);
     appendSchnorrKeyVaa2 = newMultisigVaa(0, signMultisig(appendSchnorrKeyEnvelope2, guardianPrivateKeysSet0), appendSchnorrKeyEnvelope2);
+
+    bytes memory appendECDSAVaaMessage1 = newAppendECDSAKeyMessage(0, 0, ecdsaPublicKeys[0], 0, schnorrShardDataHash);
+    bytes memory appendECDSAVaaEnvelope1 = newVaaEnvelope(uint32(block.timestamp), 0, CHAIN_ID_SOLANA, GOVERNANCE_ADDRESS, 0, 0, appendECDSAVaaMessage1);
+    appendECDSAVaa1 = newMultisigVaa(0, signMultisig(appendECDSAVaaEnvelope1, guardianPrivateKeysSet0), appendECDSAVaaEnvelope1);
   }
 
   function test_verifyMultisig() public {
@@ -938,6 +1181,17 @@ contract TestAssembly2 is VerificationTestAPI {
     vm.assertEq(payloadOffset, 1 + 4 + 20 + 32 + 4 + 4 + 2 + 32 + 8 + 1);
   }
 
+  function test_verifyECDSA() public {
+    pullGuardianSets(_wormholeVerifierV2, 1);
+    appendECDSAKey(_wormholeVerifierV2, appendECDSAVaa1, schnorrShardsRaw);
+    (uint16 emitterChain, bytes32 emitterAddress, uint64 sequence, uint16 payloadOffset) =
+      _wormholeVerifierV2.verify(smallECDSAVaa);
+    vm.assertEq(emitterChain, 0);
+    vm.assertEq(emitterAddress, bytes32(0));
+    vm.assertEq(sequence, 0);
+    vm.assertEq(payloadOffset, 1 + 4 + 32 + 32 + 1 + 4 + 4 + 2 + 32 + 8 + 1);
+  }
+
   function test_verifyMultisigBig() public {
     pullGuardianSets(_wormholeVerifierV2, 1);
     (uint16 emitterChain, bytes32 emitterAddress, uint64 sequence, uint16 payloadOffset) =
@@ -958,6 +1212,17 @@ contract TestAssembly2 is VerificationTestAPI {
     vm.assertEq(emitterAddress, bytes32(0));
     vm.assertEq(sequence, 0);
     vm.assertEq(payloadOffset, 1 + 4 + 20 + 32 + 4 + 4 + 2 + 32 + 8 + 1);
+  }
+
+  function test_verifyECDSABig() public {
+    pullGuardianSets(_wormholeVerifierV2, 1);
+    appendECDSAKey(_wormholeVerifierV2, appendECDSAVaa1, schnorrShardsRaw);
+    (uint16 emitterChain, bytes32 emitterAddress, uint64 sequence, uint16 payloadOffset) =
+      _wormholeVerifierV2.verify(bigECDSAVaa);
+    vm.assertEq(emitterChain, 0);
+    vm.assertEq(emitterAddress, bytes32(0));
+    vm.assertEq(sequence, 0);
+    vm.assertEq(payloadOffset, 1 + 4 + 32 + 32 + 1 + 4 + 4 + 2 + 32 + 8 + 1);
   }
 
   // V1 codepaths
@@ -1066,7 +1331,7 @@ contract TestAssembly2 is VerificationTestAPI {
     }));
 
     uint32 initGuardianSetIndex = 2;
-    WormholeVerifier tempVerifier = new WormholeVerifier(wormholeMock, initGuardianSetIndex, 0, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(wormholeMock, initGuardianSetIndex, 0, 0, 1, new bytes(0), new bytes(0));
 
     // small multisig VAA has guardian set 0 in the header
     vm.expectRevert(abi.encodeWithSelector(
@@ -1106,7 +1371,7 @@ contract TestAssembly2 is VerificationTestAPI {
 
   function test_appendSchnorrKey_canSkipIndicesOnDeploy() public {
     uint32 schnorrKeyIndex2 = 3;
-    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, schnorrKeyIndex2, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, schnorrKeyIndex2, 0, 1, new bytes(0), new bytes(0));
 
     bytes32 schnorrShardDataHash = keccak256(schnorrShardsRaw);
 
@@ -1119,11 +1384,11 @@ contract TestAssembly2 is VerificationTestAPI {
 
   function test_appendSchnorrKey_deployCanPreventSubmissionOfOldIndices() public {
     uint32 initialSchnorrKeyIndex = 3;
-    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, initialSchnorrKeyIndex, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, initialSchnorrKeyIndex, 0, 1, new bytes(0), new bytes(0));
 
     vm.expectRevert(abi.encodeWithSelector(
       WormholeVerifier.UpdateFailed.selector,
-      MASK_UPDATE_RESULT_INVALID_KEY_INDEX | 0xe8
+      MASK_UPDATE_RESULT_INVALID_KEY_INDEX
     ));
     appendSchnorrKey(tempVerifier, appendSchnorrKeyVaa1, schnorrShardsRaw);
   }
@@ -1142,7 +1407,7 @@ contract TestAssembly2 is VerificationTestAPI {
 
     vm.expectRevert(abi.encodeWithSelector(
       WormholeVerifier.UpdateFailed.selector,
-      MASK_UPDATE_RESULT_INVALID_KEY_INDEX | 0xe8
+      MASK_UPDATE_RESULT_INVALID_KEY_INDEX
     ));
     appendSchnorrKey(_wormholeVerifierV2, appendSchnorrKeyVaa1, schnorrShardsRaw);
   }
@@ -1162,14 +1427,14 @@ contract TestAssembly2 is VerificationTestAPI {
 
     vm.expectRevert(abi.encodeWithSelector(
       WormholeVerifier.UpdateFailed.selector,
-      MASK_UPDATE_RESULT_INVALID_KEY_INDEX | 0xe8
+      MASK_UPDATE_RESULT_INVALID_KEY_INDEX
     ));
     appendSchnorrKey(_wormholeVerifierV2, appendSchnorrKeyVaa3, schnorrShardsRaw);
   }
 
   function testRevert_appendMaxSchnorrKey() public {
     uint32 schnorrKeyIndex = type(uint32).max;
-    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, schnorrKeyIndex, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, schnorrKeyIndex, 0, 1, new bytes(0), new bytes(0));
 
     bytes32 schnorrShardDataHash = keccak256(schnorrShardsRaw);
 
@@ -1179,7 +1444,7 @@ contract TestAssembly2 is VerificationTestAPI {
 
     vm.expectRevert(abi.encodeWithSelector(
       WormholeVerifier.UpdateFailed.selector,
-      MASK_UPDATE_RESULT_INVALID_KEY_INDEX | 0xe8
+      MASK_UPDATE_RESULT_INVALID_KEY_INDEX
     ));
     appendSchnorrKey(tempVerifier, appendSchnorrKeyVaa3, schnorrShardsRaw);
   }
@@ -1264,7 +1529,7 @@ contract TestAssembly2 is VerificationTestAPI {
   }
 
   function test_verifyVaaV2_skippedKey() public {
-    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, 1, 1, new bytes(0));
+    WormholeVerifier tempVerifier = new WormholeVerifier(_wormholeV1Mock, 0, 1, 0, 1, new bytes(0), new bytes(0));
     pullGuardianSets(tempVerifier, 1);
     appendSchnorrKey(tempVerifier, appendSchnorrKeyVaa2, schnorrShardsRaw);
 
