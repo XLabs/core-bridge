@@ -111,13 +111,13 @@ contract WormholeVerifier is EIP712Encoding {
   uint256 private constant SHIFT_GET_20 = 256 - 20 * 8;
 
   // Slot layout information
-  // NOTE: We break up the keyspace into 64 bit sub-spaces, to make the keyspace more manageable.
-  //       We list the index sizes for each sub-space. There's a lot of gaps in the keyspace,
-  //       this is just to keep the sub-spaces uniform.
   uint256 private constant SLOT_MULTISIG_KEY_COUNT  = 1000;
   uint256 private constant SLOT_SCHNORR_KEY_COUNT   = 1001;
   uint256 private constant SLOT_ECDSA_KEY_COUNT     = 1002;
 
+  // NOTE: We break up the keyspace into 64 bit sub-spaces, to make the keyspace more manageable.
+  //       We list the index sizes for each sub-space. There's a lot of gaps in the keyspace,
+  //       this is just to keep the sub-spaces uniform. Key sub-space 0 is reserved for one-off uses above.
   uint256 private constant SLOT_MULTISIG_KEY_DATA       =  1 << 64; // 32 bit keyspace (32 bit key index)
 
   uint256 private constant SLOT_SCHNORR_KEY_DATA        =  2 << 64; // 32 bit keyspace (32 bit key index)
