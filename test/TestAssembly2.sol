@@ -595,23 +595,14 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     uint256 schnorrVaaHeaderLength2 = 4+20+32;
     uint256 ecdsaVaaHeaderLength2 = 4+32+32+1;
 
-    bytes memory smallMultisigVaaHeader2;
-    bytes memory bigMultisigVaaHeader2;
-    (smallMultisigVaaHeader2,) = smallMultisigVaa.sliceMemUnchecked(1, multisigVaaHeaderLength2);
-    (bigMultisigVaaHeader2,) = bigMultisigVaa.sliceMemUnchecked(1, multisigVaaHeaderLength2);
+    (bytes memory smallMultisigVaaHeader2,) = smallMultisigVaa.sliceMemUnchecked(1, multisigVaaHeaderLength2);
+    (bytes memory bigMultisigVaaHeader2,) = bigMultisigVaa.sliceMemUnchecked(1, multisigVaaHeaderLength2);
 
-    bytes memory smallSchnorrVaaHeader2 = new bytes(schnorrVaaHeaderLength2);
-    bytes memory bigSchnorrVaaHeader2 = new bytes(schnorrVaaHeaderLength2);
-    
-    for (uint256 i = 0; i < schnorrVaaHeaderLength2; i++) {
-      smallSchnorrVaaHeader2[i] = smallSchnorrVaa[i + 1];
-      bigSchnorrVaaHeader2[i] = bigSchnorrVaa[i + 1];
-    }
+    (bytes memory smallSchnorrVaaHeader2,) = smallSchnorrVaa.sliceMemUnchecked(1, schnorrVaaHeaderLength2);
+    (bytes memory bigSchnorrVaaHeader2,) = bigSchnorrVaa.sliceMemUnchecked(1, schnorrVaaHeaderLength2);
 
-    bytes memory smallECDSAVaaHeader2 = new bytes(ecdsaVaaHeaderLength2);
-    bytes memory bigECDSAVaaHeader2 = new bytes(ecdsaVaaHeaderLength2);
-    (smallECDSAVaaHeader2,) = smallECDSAVaa.sliceMemUnchecked(1, ecdsaVaaHeaderLength2);
-    (bigECDSAVaaHeader2,) = bigECDSAVaa.sliceMemUnchecked(1, ecdsaVaaHeaderLength2);
+    (bytes memory smallECDSAVaaHeader2,) = smallECDSAVaa.sliceMemUnchecked(1, ecdsaVaaHeaderLength2);
+    (bytes memory bigECDSAVaaHeader2,) = bigECDSAVaa.sliceMemUnchecked(1, ecdsaVaaHeaderLength2);
 
     batchMultisigMessage = abi.encodePacked(
       WormholeVerifier.verifyBatch.selector,
@@ -656,21 +647,9 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     uint256 schnorrVaaHeaderLength3 = 20+32;
     uint256 ecdsaVaaHeaderLength3 = 32+32+1;
 
-    bytes memory smallMultisigVaaHeader3 = new bytes(multisigVaaHeaderLength3);
-    bytes memory smallSchnorrVaaHeader3 = new bytes(schnorrVaaHeaderLength3);
-    bytes memory smallECDSAVaaHeader3 = new bytes(ecdsaVaaHeaderLength3);
-
-    for (uint256 i = 0; i < multisigVaaHeaderLength3; i++) {
-      smallMultisigVaaHeader3[i] = smallMultisigVaa[i];
-    }
-
-    for (uint256 i = 0; i < schnorrVaaHeaderLength3; i++) {
-      smallSchnorrVaaHeader3[i] = smallSchnorrVaa[i];
-    }
-
-    for (uint256 i = 0; i < ecdsaVaaHeaderLength3; i++) {
-      smallECDSAVaaHeader3[i] = smallECDSAVaa[i];
-    }
+    (bytes memory smallMultisigVaaHeader3,) = smallMultisigVaa.sliceMemUnchecked(5, multisigVaaHeaderLength3);
+    (bytes memory smallSchnorrVaaHeader3,) = smallSchnorrVaa.sliceMemUnchecked(5, schnorrVaaHeaderLength3);
+    (bytes memory smallECDSAVaaHeader3,) = smallECDSAVaa.sliceMemUnchecked(5, ecdsaVaaHeaderLength3);
 
     batchMultisigUniformMessage = abi.encodePacked(
       WormholeVerifier.verifyBatch.selector,
@@ -705,31 +684,16 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
 
   function setUpMessages2(bytes memory smallEnvelope, bytes memory bigEnvelope) internal {
     uint256 multisigVaaHeaderLength = 1+4+1+66*SHARD_QUORUM;
-    bytes memory smallMultisigVaaHeader = new bytes(multisigVaaHeaderLength);
-    bytes memory bigMultisigVaaHeader = new bytes(multisigVaaHeaderLength);
-
-    for (uint256 i = 0; i < multisigVaaHeaderLength; i++) {
-      smallMultisigVaaHeader[i] = smallMultisigVaa[i];
-      bigMultisigVaaHeader[i] = bigMultisigVaa[i];
-    }
+    (bytes memory smallMultisigVaaHeader,) = smallMultisigVaa.sliceMemUnchecked(0, multisigVaaHeaderLength);
+    (bytes memory bigMultisigVaaHeader,) = bigMultisigVaa.sliceMemUnchecked(0, multisigVaaHeaderLength);
 
     uint256 schnorrVaaHeaderLength = 1+4+20+32;
-    bytes memory smallSchnorrVaaHeader = new bytes(schnorrVaaHeaderLength);
-    bytes memory bigSchnorrVaaHeader = new bytes(schnorrVaaHeaderLength);
-
-    for (uint256 i = 0; i < schnorrVaaHeaderLength; i++) {
-      smallSchnorrVaaHeader[i] = smallSchnorrVaa[i];
-      bigSchnorrVaaHeader[i] = bigSchnorrVaa[i];
-    }
+    (bytes memory smallSchnorrVaaHeader,) = smallSchnorrVaa.sliceMemUnchecked(0, schnorrVaaHeaderLength);
+    (bytes memory bigSchnorrVaaHeader,) = bigSchnorrVaa.sliceMemUnchecked(0, schnorrVaaHeaderLength);
 
     uint256 ecdsaVaaHeaderLength = 1+4+32+32+1;
-    bytes memory smallECDSAVaaHeader = new bytes(ecdsaVaaHeaderLength);
-    bytes memory bigECDSAVaaHeader = new bytes(ecdsaVaaHeaderLength);
-
-    for (uint256 i = 0; i < ecdsaVaaHeaderLength; i++) {
-      smallECDSAVaaHeader[i] = smallECDSAVaa[i];
-      bigECDSAVaaHeader[i] = bigECDSAVaa[i];
-    }
+    (bytes memory smallECDSAVaaHeader,) = smallECDSAVaa.sliceMemUnchecked(0, ecdsaVaaHeaderLength);
+    (bytes memory bigECDSAVaaHeader,) = bigECDSAVaa.sliceMemUnchecked(0, ecdsaVaaHeaderLength);
 
     batchMessage = abi.encodePacked(
       VERIFY_ANY,
@@ -987,6 +951,27 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     vm.assertEq(data.length, 0);
   }
 
+  function test_benchmark_verifyBatchMultisigUniform() public {
+    (bool success, bytes memory data) = address(_wormholeVerifierV2).call(batchMultisigUniformMessage);
+
+    vm.assertEq(success, true);
+    vm.assertEq(data.length, 0);
+  }
+
+  function test_benchmark_verifyBatchSchnorrUniform() public {
+    (bool success, bytes memory data) = address(_wormholeVerifierV2).call(batchSchnorrUniformMessage);
+
+    vm.assertEq(success, true);
+    vm.assertEq(data.length, 0);
+  }
+
+  function test_benchmark_verifyBatchECDSAUniform() public {
+    (bool success, bytes memory data) = address(_wormholeVerifierV2).call(batchECDSAUniformMessage);
+
+    vm.assertEq(success, true);
+    vm.assertEq(data.length, 0);
+  }
+
   function test_verifyBatchSchnorrInvalidMessageLength() public {
     (bool success, bytes memory data) = address(_wormholeVerifierV2).call(abi.encodePacked(
       WormholeVerifier.verifyBatch.selector,
@@ -1011,6 +996,13 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
 
     (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
       WormholeVerifier.verifyBatch.selector,
+      VERIFY_ECDSA
+    ));
+    vm.assertEq(success, false);
+    vm.assertEq(data.length, 4+32);
+
+    (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
       VERIFY_SCHNORR
     ));
     vm.assertEq(success, false);
@@ -1019,6 +1011,14 @@ contract TestAssembly2Benchmark is VerificationTestAPI {
     (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
       WormholeVerifier.verifyBatch.selector,
       VERIFY_MULTISIG
+    ));
+    vm.assertEq(success, false);
+    vm.assertEq(data.length, 4+32);
+
+    (success, data) = address(_wormholeVerifierV2).call(abi.encodePacked(
+      WormholeVerifier.verifyBatch.selector,
+      VERIFY_ECDSA_UNIFORM,
+      uint32(0) // Key index
     ));
     vm.assertEq(success, false);
     vm.assertEq(data.length, 4+32);

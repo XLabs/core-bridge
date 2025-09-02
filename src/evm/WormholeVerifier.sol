@@ -236,19 +236,26 @@ contract WormholeVerifier is EIP712Encoding {
   uint256 private constant LENGTH_BATCH_UNIFORM_MINIMUM = 4 + 1 + 4 + 1;
 
   // Offsets relative to each entry's start
+  // - Multisig
   uint256 private constant OFFSET_BATCH_MULTISIG_SIGNATURE_COUNT = 4;
   uint256 private constant OFFSET_BATCH_MULTISIG_SIGNATURES      = 4 + 1;
+
+  uint256 private constant OFFSET_BATCH_UNIFORM_MULTISIG_SIGNATURES = 1;
+
+  // - Schnorr
+  uint256 private constant LENGTH_BATCH_ANY_SCHNORR_ENTRY = 1 + 4 + 20 + 32 + 32;
 
   uint256 private constant OFFSET_BATCH_SCHNORR_ENTRY_R      = 4;
   uint256 private constant OFFSET_BATCH_SCHNORR_ENTRY_S      = 4 + 20;
   uint256 private constant OFFSET_BATCH_SCHNORR_ENTRY_DIGEST = 4 + 20 + 32;
   uint256 private constant LENGTH_BATCH_SCHNORR_ENTRY        = 4 + 20 + 32 + 32;
 
-  uint256 private constant LENGTH_VERSIONED_BATCH_SCHNORR_ENTRY = 1 + 4 + 20 + 32 + 32;
+  uint256 private constant OFFSET_BATCH_UNIFORM_SCHNORR_S      = 20;
+  uint256 private constant OFFSET_BATCH_UNIFORM_SCHNORR_DIGEST = 20 + 32;
+  uint256 private constant LENGTH_BATCH_UNIFORM_SCHNORR_ENTRY  = 20 + 32 + 32;
 
-  uint256 private constant OFFSET_BATCH_SCHNORR_UNIFORM_S      = 20;
-  uint256 private constant OFFSET_BATCH_SCHNORR_UNIFORM_DIGEST = 20 + 32;
-  uint256 private constant LENGTH_BATCH_SCHNORR_UNIFORM_ENTRY  = 20 + 32 + 32;
+  // - ECDSA
+  uint256 private constant LENGTH_BATCH_ANY_ECDSA_ENTRY = 1 + 4 + 32 + 32 + 1 + 32;
 
   uint256 private constant OFFSET_BATCH_ECDSA_ENTRY_R      = 4;
   uint256 private constant OFFSET_BATCH_ECDSA_ENTRY_S      = 4 + 32;
@@ -256,10 +263,10 @@ contract WormholeVerifier is EIP712Encoding {
   uint256 private constant OFFSET_BATCH_ECDSA_ENTRY_DIGEST = 4 + 32 + 32 + 1;
   uint256 private constant LENGTH_BATCH_ECDSA_ENTRY        = 4 + 32 + 32 + 1 + 32;
 
-  uint256 private constant OFFSET_BATCH_ECDSA_UNIFORM_S      = 32;
-  uint256 private constant OFFSET_BATCH_ECDSA_UNIFORM_V      = 32 + 32;
-  uint256 private constant OFFSET_BATCH_ECDSA_UNIFORM_DIGEST = 32 + 32 + 1;
-  uint256 private constant LENGTH_BATCH_ECDSA_UNIFORM_ENTRY  = 32 + 32 + 1 + 32;
+  uint256 private constant OFFSET_BATCH_UNIFORM_ECDSA_ENTRY_S      = 32;
+  uint256 private constant OFFSET_BATCH_UNIFORM_ECDSA_ENTRY_V      = 32 + 32;
+  uint256 private constant OFFSET_BATCH_UNIFORM_ECDSA_ENTRY_DIGEST = 32 + 32 + 1;
+  uint256 private constant LENGTH_BATCH_UNIFORM_ECDSA_ENTRY        = 32 + 32 + 1 + 32;
 
   // Schnorr challenge information
   uint256 private constant OFFSET_SCHNORR_CHALLENGE_PUBKEY = 20;
@@ -293,6 +300,7 @@ contract WormholeVerifier is EIP712Encoding {
 
   // We don't make this immutable to keep bytecode verification from build simple.
   // It's only used in cold execution paths like governance operations.
+  // FIXME: This should be defined using a fixed slot to ensure it doesn't interfere with the other state
   ICoreBridge private _coreBridge;
 
   constructor(
@@ -327,7 +335,7 @@ contract WormholeVerifier is EIP712Encoding {
     assembly ("memory-safe") {
       // NOTE: Unfortunately, we have to duplicate this pile of functions because of Solidity's inability to share them between assembly blocks
 
-     // !!!!!                    START OF DUPLICATED FUNCTIONS                    !!!!!
+      // !!!!!                    START OF DUPLICATED FUNCTIONS                    !!!!!
       // !!!!!    Please make sure that they are kept identical between copies!    !!!!!
 
       // Calldata reader functions
@@ -894,7 +902,7 @@ contract WormholeVerifier is EIP712Encoding {
             // Verify the signature
             invalidExpirationTime, invalidMismatch := verifySingleECDSA(keyIndex, r, s, v, digest, buffer)
             invalidTotal := or(invalidExpirationTime, invalidMismatch)
-            offset := add(offset, LENGTH_BATCH_ECDSA_ENTRY)
+            offset := add(offset, LENGTH_BATCH_ANY_ECDSA_ENTRY)
           }
           case 0x02 {
             // Decode the schnorr header and digest
@@ -906,7 +914,7 @@ contract WormholeVerifier is EIP712Encoding {
             // Verify the signature
             invalidExpirationTime, invalidPubkey, invalidSignature, invalidMismatch := verifySingleSchnorr(keyIndex, r, s, digest, buffer)
             invalidTotal := or(invalidExpirationTime, or(invalidPubkey, or(invalidSignature, invalidMismatch)))
-            offset := add(offset, LENGTH_VERSIONED_BATCH_SCHNORR_ENTRY)
+            offset := add(offset, LENGTH_BATCH_ANY_SCHNORR_ENTRY)
           }
           case 0x01 {
             // Decode the multisig header and digest
@@ -1016,7 +1024,8 @@ contract WormholeVerifier is EIP712Encoding {
       function verifyBatchECDSA() {
         let invalidExpirationTime := 0
         let invalidMismatch := 0
-        let invalidTotal := 0
+        let invalidMessageLength := lt(calldatasize(), LENGTH_BATCH_MINIMUM)
+        let invalidTotal := invalidMessageLength
 
         let buffer := mload(PTR_FREE_MEMORY)
         let offset := OFFSET_BATCH_DATA
@@ -1034,7 +1043,7 @@ contract WormholeVerifier is EIP712Encoding {
           invalidTotal := or(invalidExpirationTime, invalidMismatch)
         }
 
-        let invalidMessageLength := iszero(eq(calldatasize(), offset))
+        invalidMessageLength := or(invalidMessageLength, iszero(eq(calldatasize(), offset)))
         invalidTotal := or(invalidTotal, invalidMessageLength)
 
         if invalidTotal {
@@ -1069,7 +1078,7 @@ contract WormholeVerifier is EIP712Encoding {
 
         for {} and(iszero(invalidTotal), lt(offset, calldatasize())) {} {
           let signatureCount := getCd_1(offset)
-          let signaturesOffset := add(offset, 1) // TODO: magic number
+          let signaturesOffset := add(offset, OFFSET_BATCH_UNIFORM_MULTISIG_SIGNATURES)
           let digestOffset := add(signaturesOffset, mul(signatureCount, LENGTH_MULTISIG_SIGNATURE))
           let digest := getCd_32(digestOffset)
 
@@ -1107,10 +1116,10 @@ contract WormholeVerifier is EIP712Encoding {
         let buffer := mload(PTR_FREE_MEMORY)
         let offset := OFFSET_BATCH_UNIFORM_DATA
 
-        for {} and(iszero(invalidTotal), lt(offset, calldatasize())) { offset := add(offset, LENGTH_BATCH_SCHNORR_UNIFORM_ENTRY) } {
+        for {} and(iszero(invalidTotal), lt(offset, calldatasize())) { offset := add(offset, LENGTH_BATCH_UNIFORM_SCHNORR_ENTRY) } {
           let r := getCd_20(offset)
-          let s := getCd_32(add(offset, OFFSET_BATCH_SCHNORR_UNIFORM_S))
-          let digest := getCd_32(add(offset, OFFSET_BATCH_SCHNORR_UNIFORM_DIGEST))
+          let s := getCd_32(add(offset, OFFSET_BATCH_UNIFORM_SCHNORR_S))
+          let digest := getCd_32(add(offset, OFFSET_BATCH_UNIFORM_SCHNORR_DIGEST))
 
           // Verify the signature
           invalidPubkey, invalidSignature, invalidMismatch := checkSchnorrSignature(px, parity, digest, r, s, buffer)
@@ -1135,24 +1144,25 @@ contract WormholeVerifier is EIP712Encoding {
 
         // Validate the entries
         let invalidMismatch := 0
-        let invalidTotal := invalidExpirationTime
+        let invalidMessageLength := lt(calldatasize(), LENGTH_BATCH_UNIFORM_MINIMUM)
+        let invalidTotal := or(invalidExpirationTime, invalidMessageLength)
 
         let buffer := mload(PTR_FREE_MEMORY)
         let offset := OFFSET_BATCH_UNIFORM_DATA
 
-        for {} and(iszero(invalidTotal), lt(offset, calldatasize())) { offset := add(offset, LENGTH_BATCH_ECDSA_ENTRY) } {
+        for {} and(iszero(invalidTotal), lt(offset, calldatasize())) { offset := add(offset, LENGTH_BATCH_UNIFORM_ECDSA_ENTRY) } {
           // Decode the schnorr header and digest
-          let r := getCd_32(add(offset, OFFSET_BATCH_ECDSA_ENTRY_R))
-          let s := getCd_32(add(offset, OFFSET_BATCH_ECDSA_ENTRY_S))
-          let v := getCd_1(add(offset, OFFSET_BATCH_ECDSA_ENTRY_V))
-          let digest := getCd_32(add(offset, OFFSET_BATCH_ECDSA_ENTRY_DIGEST))
+          let r := getCd_32(offset)
+          let s := getCd_32(add(offset, OFFSET_BATCH_UNIFORM_ECDSA_ENTRY_S))
+          let v := getCd_1(add(offset, OFFSET_BATCH_UNIFORM_ECDSA_ENTRY_V))
+          let digest := getCd_32(add(offset, OFFSET_BATCH_UNIFORM_ECDSA_ENTRY_DIGEST))
 
           // Verify the signature
           invalidMismatch := iszero(ecrecover(digest, r, s, v, buffer, pubkey))
           invalidTotal := or(invalidExpirationTime, invalidMismatch)
         }
 
-        let invalidMessageLength := iszero(eq(calldatasize(), offset))
+        invalidMessageLength := or(invalidMessageLength, iszero(eq(calldatasize(), offset)))
         invalidTotal := or(invalidTotal, invalidMessageLength)
 
         if invalidTotal {
