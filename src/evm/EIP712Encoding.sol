@@ -33,11 +33,11 @@ contract EIP712Encoding is IERC5267 {
   bytes32 constant EIP712_NAME_HASH = keccak256(bytes(EIP712_NAME));
   bytes32 constant EIP712_VERSION_HASH = keccak256(bytes(EIP712_VERSION));
 
-  bytes32 private immutable _domainSeparator;
-
-  constructor () {
-    _domainSeparator = getDomainSeparator(block.chainid, address(this));
-  }
+  // TODO: Should these be immutable? This function is really rare so it's not a big deal either way.
+  // FIXME: Fixed slot IDs so they don't interfere with the other state
+  bytes32 private _cachedDomainSeparator;
+  address private _cachedThis;
+  uint256 private _cachedChainId;
 
   function eip712Domain() external view returns (
     bytes1 fields,
@@ -59,8 +59,14 @@ contract EIP712Encoding is IERC5267 {
     );
   }
 
-  function DOMAIN_SEPARATOR() public view returns (bytes32) {
-    return _domainSeparator;
+  function DOMAIN_SEPARATOR() public returns (bytes32) {
+    if (eagerOr(address(this) != _cachedThis, block.chainid != _cachedChainId)) {
+      _cachedThis = address(this);
+      _cachedChainId = block.chainid;
+      _cachedDomainSeparator = keccak256(abi.encode(EIP712_DOMAIN_TYPE_HASH, EIP712_NAME_HASH, EIP712_VERSION_HASH, _cachedChainId, _cachedThis));
+    }
+
+    return _cachedDomainSeparator;
   }
 
   function getDomainSeparator(
@@ -80,7 +86,7 @@ contract EIP712Encoding is IERC5267 {
     uint32 thresholdKeyIndex,
     uint256 nonce,
     bytes32 guardianId
-  ) public view returns (bytes32) {
+  ) public returns (bytes32) {
     bytes32 idHash = keccak256(abi.encode(
       REGISTER_TYPE_HASH,
       thresholdKeyIndex,
@@ -88,6 +94,6 @@ contract EIP712Encoding is IERC5267 {
       guardianId
     ));
 
-    return keccak256(abi.encodePacked("\x19\x01", _domainSeparator, idHash));
+    return keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), idHash));
   }
 }
