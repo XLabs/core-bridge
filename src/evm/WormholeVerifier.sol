@@ -62,17 +62,19 @@ uint256 constant MASK_UPDATE_RESULT_INVALID_OPCODE              = 1 << 31;
 uint256 constant MASK_UPDATE_RESULT_INVALID_DATA_LENGTH         = 1 << 32;
 uint256 constant MASK_UPDATE_RESULT_MULTISIG_KEY_INDEX_MISMATCH = 1 << 33;
 uint256 constant MASK_UPDATE_RESULT_INVALID_ECDSA_KEY           = 1 << 34;
-uint256 constant MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX    = 1 << 35;
+uint256 constant MASK_UPDATE_RESULT_INVALID_ECDSA_KEY_INDEX     = 1 << 35;
 
 // Get opcodes
-uint8 constant GET_CURRENT_MULTISIG_KEY_DATA = 0;
-uint8 constant GET_MULTISIG_KEY_DATA         = 1;
-uint8 constant GET_CURRENT_SCHNORR_KEY_DATA  = 2;
-uint8 constant GET_SCHNORR_KEY_DATA          = 3;
-uint8 constant GET_SCHNORR_SHARD_DATA        = 4;
-uint8 constant GET_CURRENT_ECDSA_KEY_DATA    = 5;
-uint8 constant GET_ECDSA_KEY_DATA            = 6;
-uint8 constant GET_ECDSA_SHARD_DATA          = 7;
+uint8 constant GET_CURRENT_MULTISIG_KEY_DATA  = 0;
+uint8 constant GET_MULTISIG_KEY_DATA          = 1;
+uint8 constant GET_CURRENT_SCHNORR_KEY_DATA   = 2;
+uint8 constant GET_SCHNORR_KEY_DATA           = 3;
+uint8 constant GET_SCHNORR_SHARD_DATA         = 4;
+uint8 constant GET_CURRENT_SCHNORR_SHARD_DATA = 5;
+uint8 constant GET_CURRENT_ECDSA_KEY_DATA     = 6;
+uint8 constant GET_ECDSA_KEY_DATA             = 7;
+uint8 constant GET_ECDSA_SHARD_DATA           = 8;
+uint8 constant GET_CURRENT_ECDSA_SHARD_DATA   = 9;
 
 // Get error flags
 uint256 constant MASK_GET_RESULT_INVALID_OPCODE      = 1 << 16;
@@ -1272,6 +1274,18 @@ contract WormholeVerifier is EIP712Encoding {
           (address[] memory keys, uint32 expirationTime) = _getMultisigKeyData(index);
 
           result = abi.encodePacked(result, uint8(keys.length), keys, expirationTime);
+        } else if (opcode == GET_CURRENT_ECDSA_SHARD_DATA) {
+          uint32 index = _getECDSAKeyCount() - 1;
+          (uint8 shardCount,) = _getECDSAExtraData(index);
+          bytes memory shardData = _getShardDataExport(SLOT_ECDSA_SHARD_MAP_SHARD, SLOT_ECDSA_SHARD_MAP_ID, index, shardCount);
+
+          result = abi.encodePacked(result, shardCount, shardData);
+        } else if (opcode == GET_CURRENT_SCHNORR_SHARD_DATA) {
+          uint32 index = _getSchnorrKeyCount() - 1;
+          (, uint8 shardCount,) = _getSchnorrExtraData(index);
+          bytes memory shardData = _getShardDataExport(SLOT_SCHNORR_SHARD_MAP_SHARD, SLOT_SCHNORR_SHARD_MAP_ID, index, shardCount);
+
+          result = abi.encodePacked(result, shardCount, shardData);
         } else if (opcode == GET_ECDSA_SHARD_DATA) {
           uint32 keyIndex;
           (keyIndex, offset) = data.asUint32CdUnchecked(offset);
