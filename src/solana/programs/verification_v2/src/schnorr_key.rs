@@ -15,7 +15,7 @@ use anchor_lang::{
 };
 use primitive_types::{U256, U512};
 use std::{io::{Read, Write}, ops::{Shr, Sub}};
-use crate::{DIGEST_SIZE, hex_literal::hex, vaa::VAASchnorrSignature};
+use crate::{DIGEST_SIZE, hex_literal::hex, schnorr_signature::VAASchnorrSignature};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SchnorrKey {

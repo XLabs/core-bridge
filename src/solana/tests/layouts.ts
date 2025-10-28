@@ -38,6 +38,30 @@ export const appendSchnorrKeyMessageLayout = [
   {name: "shardDataHash",          binary: "bytes", size: 32},
 ] as const satisfies Layout;
 
+export const appendECDSAKeyMessageLayout = [
+  {name: "module",                 binary: "bytes",           custom: MODULE_VERIFICATION_V2, omit: true},
+  {name: "action",                 binary: "uint",  size:  1, custom: 2,                      omit: true},
+  {name: "ecdsaKeyIndex",          binary: "uint",  size:  4},
+  {name: "expectedMssIndex",       binary: "uint",  size:  4},
+  {name: "ecdsaKey",               binary: "bytes", size: 20},
+  {name: "expirationDelaySeconds", binary: "uint",  size:  4},
+  {name: "shardDataHash",          binary: "bytes", size: 32},
+] as const satisfies Layout;
+
+export const ecdsaSignatureLayout = [
+  {name: "r", binary: "bytes", size: 32},
+  {name: "s", binary: "bytes", size: 32},
+  {name: "v", binary: "uint",  size: 1},
+] as const satisfies Layout;
+
+export const headerV3Layout = [
+  {name: "version",       binary: "uint",  size: 1, custom: 3, omit: true},
+  {name: "ecdsaKeyIndex", binary: "uint",  size: 4},
+  {name: "signature",     binary: "bytes", layout: ecdsaSignatureLayout},
+] as const satisfies Layout;
+
+export type HeaderV3 = LayoutToType<typeof headerV3Layout>;
+
 
 
 /* Solana core program layouts */
