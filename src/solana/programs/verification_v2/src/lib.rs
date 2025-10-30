@@ -26,10 +26,18 @@ use schnorr_signature::VAASchnorrSignature;
 use ecdsa_signature::VAAECDSASignature;
 use hex_literal::hex;
 
+pub const DIGEST_SIZE: usize = 32;
+
 const GOVERNANCE_ADDRESS: [u8; 32] =
   hex!("0000000000000000000000000000000000000000000000000000000000000004");
 
-pub const DIGEST_SIZE: usize = 32;
+// Module ID for the VerificationV2 contract, ASCII "TSS"
+pub const MODULE_VERIFICATION_V2: [u8; 32] =
+  hex!("0000000000000000000000000000000000000000000000000000000000545353");
+
+// Action IDs for appending keys
+pub const ACTION_APPEND_SCHNORR_KEY: u8 = 0x01;
+pub const ACTION_APPEND_ECDSA_KEY: u8 = 0x02;
 
 #[error_code]
 pub enum VerificationV2Error {
@@ -53,33 +61,28 @@ pub trait KeyAccount {
   fn update_expiration_timestamp(&mut self, time_lapse: u64);
 }
 
-impl KeyAccount for SchnorrKeyAccount {
-  fn index(&self) -> u32 {
-    self.index
-  }
+// Macro to implement KeyAccount trait for types with index and expiration_timestamp fields
+macro_rules! impl_key_account {
+  ($type:ty) => {
+    impl KeyAccount for $type {
+      fn index(&self) -> u32 {
+        self.index
+      }
 
-  fn is_unexpired(&self) -> bool {
-    self.is_unexpired()
-  }
+      fn is_unexpired(&self) -> bool {
+        self.expiration_timestamp == 0 || self.expiration_timestamp > Clock::get().unwrap().unix_timestamp as u64
+      }
 
-  fn update_expiration_timestamp(&mut self, time_lapse: u64) {
-    self.update_expiration_timestamp(time_lapse)
-  }
+      fn update_expiration_timestamp(&mut self, time_lapse: u64) {
+        let current_timestamp = Clock::get().unwrap().unix_timestamp as u64;
+        self.expiration_timestamp = current_timestamp + time_lapse;
+      }
+    }
+  };
 }
 
-impl KeyAccount for ECDSAKeyAccount {
-  fn index(&self) -> u32 {
-    self.index
-  }
-
-  fn is_unexpired(&self) -> bool {
-    self.is_unexpired()
-  }
-
-  fn update_expiration_timestamp(&mut self, time_lapse: u64) {
-    self.update_expiration_timestamp(time_lapse)
-  }
-}
+impl_key_account!(SchnorrKeyAccount);
+impl_key_account!(ECDSAKeyAccount);
 
 #[account]
 #[derive(InitSpace)]
@@ -196,13 +199,13 @@ pub struct AppendECDSAKey<'info> {
 #[derive(Accounts)]
 #[instruction(raw_vaa: Vec<u8>)]
 pub struct VerifyVaa<'info> {
-  /// CHECK: We validate the account type manually based on version
   #[account(
     constraint = {
       let version = raw_vaa.first().copied().unwrap_or(0);
       version == 2 || version == 3
     } @ VerificationV2Error::InvalidAccounts,
   )]
+  /// CHECK: need to deserialize manually because its type depends on the version
   pub key_account: UncheckedAccount<'info>,
 }
 

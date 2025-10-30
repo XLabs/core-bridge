@@ -227,15 +227,6 @@ pub struct SchnorrKeyAccount {
 
 impl SchnorrKeyAccount {
   pub const SEED_PREFIX: &'static [u8] = b"schnorrkey";
-
-  pub fn is_unexpired(&self) -> bool {
-    self.expiration_timestamp == 0 || self.expiration_timestamp > Clock::get().unwrap().unix_timestamp as u64
-  }
-
-  pub fn update_expiration_timestamp(&mut self, time_lapse: u64) {
-    let current_timestamp = Clock::get().unwrap().unix_timestamp as u64;
-    self.expiration_timestamp = current_timestamp + time_lapse;
-  }
 }
 
 #[cfg(test)]

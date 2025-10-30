@@ -3,7 +3,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{Write, Read, Error, ErrorKind};
 
 use crate::ecdsa_key::ECDSAKey;
-use crate::hex;
+use crate::{MODULE_VERIFICATION_V2, ACTION_APPEND_ECDSA_KEY};
 
 #[derive(Clone)]
 pub struct AppendECDSAKeyMessage {
@@ -12,13 +12,6 @@ pub struct AppendECDSAKeyMessage {
   pub ecdsa_key: ECDSAKey,
   pub expiration_delay_seconds: u32,
 }
-
-// Module ID for the VerificationV2 contract, ASCII "TSS"
-pub const MODULE_VERIFICATION_V2: [u8; 32] =
-  hex!("0000000000000000000000000000000000000000000000000000000000545353");
-
-// Action ID for appending an ECDSA key
-pub const ACTION_APPEND_ECDSA_KEY: u8 = 0x02;
 
 impl AnchorSerialize for AppendECDSAKeyMessage {
   fn serialize<W: Write>(&self, _writer: &mut W) -> std::io::Result<()> {

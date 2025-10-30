@@ -3,7 +3,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{Write, Read, Error, ErrorKind};
 
 use crate::schnorr_key::SchnorrKey;
-use crate::hex;
+use crate::{MODULE_VERIFICATION_V2, ACTION_APPEND_SCHNORR_KEY};
 
 #[derive(Clone)]
 pub struct AppendSchnorrKeyMessage {
@@ -12,13 +12,6 @@ pub struct AppendSchnorrKeyMessage {
   pub schnorr_key: SchnorrKey,
   pub expiration_delay_seconds: u32,
 }
-
-// Module ID for the VerificationV2 contract, ASCII "TSS"
-pub const MODULE_VERIFICATION_V2: [u8; 32] =
-  hex!("0000000000000000000000000000000000000000000000000000000000545353");
-
-// Action ID for appending a schnorr key
-pub const ACTION_APPEND_SCHNORR_KEY: u8 = 0x01;
 
 impl AnchorSerialize for AppendSchnorrKeyMessage {
   fn serialize<W: Write>(&self, _writer: &mut W) -> std::io::Result<()> {

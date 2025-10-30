@@ -916,7 +916,7 @@ describe("VerificationV2", function() {
       )
     })
 
-    it("Verifies a v2 VAA with ECDSA signature", async function() {
+    it("Verifies a v3 VAA", async function() {
       // First, let's check if the ECDSA key account exists and has the correct address
       const ecdsaKeyAccount = await coreV2.account.ecdsaKeyAccount.fetch(deriveECDSAKeyPda(testECDSAKeyIndex)[0]);
       console.log("ECDSA Key Account:", {
@@ -946,7 +946,7 @@ describe("VerificationV2", function() {
       console.log(`${this.test?.title}: CUs consumed: ${tx?.meta?.computeUnitsConsumed}`)
     })
 
-    it("v2 VAA ECDSA verification fails for an invalid signature", async function() {
+    it("v3 VAA verification fails for an invalid signature", async function() {
       const vaa = Buffer.from(getTestECDSAMessageInvalidSignature(testECDSAKeyIndex));
       const verifyIx = await coreV2.methods.verifyVaa(vaa).accounts({
         keyAccount: deriveECDSAKeyPda(testECDSAKeyIndex)[0],
@@ -958,7 +958,7 @@ describe("VerificationV2", function() {
       )
     })
 
-    it("Verifies a v2 VAA with ECDSA signature and decodes", async function() {
+    it("Verifies a v3 VAA and decodes", async function() {
       const vaa = Buffer.from(getTestECDSAMessage100Zeroed(testECDSAKeyIndex));
       const verifyIx = await coreV2.methods.verifyVaaAndDecode(vaa).accounts({
         keyAccount: deriveECDSAKeyPda(testECDSAKeyIndex)[0],
@@ -969,7 +969,7 @@ describe("VerificationV2", function() {
       console.log(`${this.test?.title}: CUs consumed: ${tx?.meta?.computeUnitsConsumed}`)
     })
 
-    it("v2 VAA ECDSA verification and decoding fails for an invalid signature", async function() {
+    it("v3 VAA verification and decoding fails for an invalid signature", async function() {
       const vaa = Buffer.from(getTestECDSAMessageInvalidSignature(testECDSAKeyIndex));
       const verifyIx = await coreV2.methods.verifyVaaAndDecode(vaa).accounts({
         keyAccount: deriveECDSAKeyPda(testECDSAKeyIndex)[0],
@@ -981,7 +981,7 @@ describe("VerificationV2", function() {
       )
     })
 
-    it("Verifies a v2 VAA ECDSA header with digest", async function() {
+    it("Verifies a v3 VAA header with digest", async function() {
       const vaaHeader = Buffer.from(getHeaderECDSATestMessage(testECDSAKeyIndex))
     const digest = [...vaaDigest(new Uint8Array(100))]
     const verifyIx = await coreV2.methods.verifyVaaHeaderWithDigest(vaaHeader, digest).accounts({
@@ -993,7 +993,7 @@ describe("VerificationV2", function() {
       console.log(`${this.test?.title}: CUs consumed: ${tx?.meta?.computeUnitsConsumed}`)
     })
 
-    it("v2 VAA ECDSA header and digest verification fails for an invalid signature", async function() {
+    it("v3 VAA header and digest verification fails for an invalid signature", async function() {
       const vaaHeader = Buffer.from(getHeaderECDSATestMessageInvalidSignature(testECDSAKeyIndex))
       const digest = [...vaaDigest(new Uint8Array(100))]
       const verifyIx = await coreV2.methods.verifyVaaHeaderWithDigest(vaaHeader, digest).accounts({
