@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "Minimal client for peer management with Ethereum integration",
   "type": "module",
-  "types": "./ts-build/src/client/index.d.ts",
-  "main": "./ts-build/src/client/index.js",
+  "types": "./ts-build/src/index.d.ts",
+  "main": "./ts-build/src/index.js",
   "scripts": {
     "build": "tsc --build",
-    "start:client": "tsx src/client/cli.ts",
-    "dev:client": "tsx --watch src/client/cli.ts"
+    "start:client": "tsx src/cli.ts",
+    "dev:client": "tsx --watch src/cli.ts"
   },
   "dependencies": {
     "@xlabs-xyz/peer-lib": "workspace:*",

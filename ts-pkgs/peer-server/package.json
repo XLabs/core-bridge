@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "Minimal Node.js REST server for peer management with Ethereum integration",
   "type": "module",
-  "types": "./ts-build/src/server/index.d.ts",
-  "main": "./ts-build/src/server/index.js",
+  "types": "./ts-build/src/index.d.ts",
+  "main": "./ts-build/src/index.js",
   "scripts": {
     "build": "tsc --build",
-    "start:server": "tsx src/server/cli.ts",
-    "dev:server": "tsx --watch src/server/cli.ts",
+    "start:server": "tsx src/cli.ts",
+    "dev:server": "tsx --watch src/cli.ts",
     "test": "npm run build && vitest --run"
   },
   "dependencies": {
